@@ -22,14 +22,77 @@
   </style>
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+  <style>
+    /* Additional styles for new elements */
+    .hidden { display: none !important; }
+    #app-controls-container { padding: 10px; background: #e9e9e9; border-bottom: 1px solid #ccc; display: flex; gap: 10px; align-items: center;}
+    #queue-status-display { margin-left: auto; font-style: italic; }
+    .ui-section { padding: 15px; border: 1px solid #ddd; margin-bottom: 15px; background: #fff; }
+    .ui-section h3 { margin-top: 0; }
+    #location-confirmation-area, #inner-loop-decision-area {
+        border-top: 2px dashed #ccc;
+        margin-top: 15px;
+        padding-top: 15px;
+    }
+    #located-snippet-preview { background-color: #f0f0f0; border: 1px solid #ccc; padding: 10px; margin-bottom:10px; white-space: pre-wrap; font-family: monospace;}
+  </style>
 </head>
 <body>
-  <div id="header-container"></div>
-  <div id="app-container">
-    <div id="sidebar-container"></div>
-    <div id="mainbody-container"></div>
+  <div id="app-controls-container">
+    <button id="btn-approve-end-session">Approve & End Session</button>
+    <button id="btn-request-new-edit">Request New Edit</button>
+    <div id="queue-status-display">Queue: 0 | Idle</div>
   </div>
-  <div id="footer-container"></div>
+
+  <div id="edit-request-input-area" class="ui-section hidden">
+    <h3>New Edit Request</h3>
+    <div class="field-group">
+      <label for="input-hint">Where to Edit? (Hint)</label>
+      <input type="text" id="input-hint" placeholder="e.g., 'the second paragraph', 'the function named main'">
+    </div>
+    <div class="field-group">
+      <label for="input-instruction">What to Apply? (Instruction)</label>
+      <textarea id="input-instruction" placeholder="e.g., 'make it more concise', 'add a parameter for X'"></textarea>
+    </div>
+    <button id="btn-add-to-queue">Add to Edit Queue</button>
+  </div>
+
+  <div id="app-container">
+    <div id="sidebar-container">
+      <!-- Existing sidebar elements from config.json will go here via frontend.js -->
+      <!-- New HITL specific controls can also be added here if desired -->
+    </div>
+    <div id="mainbody-container">
+      <!-- Monaco Diff Editor will be placed here by frontend.js -->
+      <!-- This will display current_content vs provisional_edit during inner loop -->
+
+      <div id="location-confirmation-area" class="ui-section hidden">
+        <h3>Confirm Snippet Location</h3>
+        <p>Original Hint: <strong id="original-hint-display"></strong></p>
+        <p>LLM Located Snippet (from original content):</p>
+        <div id="located-snippet-preview"></div>
+        <div class="field-group">
+            <label for="input-revised-hint">Revise Hint (optional, if LLM missed the spot):</label>
+            <input type="text" id="input-revised-hint">
+        </div>
+        <button id="btn-confirm-location">Confirm Location & Proceed with Edit</button>
+        <button id="btn-cancel-location-stage">Cancel This Edit Task</button>
+      </div>
+
+      <div id="inner-loop-decision-area" class="ui-section hidden">
+        <h3>Review Provisional Edit</h3>
+        <p>The diff editor above shows the original snippet vs. the LLM's proposed change.</p>
+        <button id="btn-approve-this-edit" class="action-button primary">Approve This Edit</button>
+        <button id="btn-refine-this-edit" class="action-button">Refine This Edit</button>
+        <button id="btn-discard-this-edit" class="action-button">Discard This Edit Task</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="footer-container">
+     <!-- Existing footer elements from config.json will go here via frontend.js -->
+  </div>
+
   <script src="frontend.js"></script>
 </body>
 </html>
