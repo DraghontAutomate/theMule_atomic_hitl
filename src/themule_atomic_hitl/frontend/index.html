@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fully Configurable Tool</title>
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; display: flex; flex-direction: column; }
+    #header-container { padding: 10px 15px; border-bottom: 1px solid #ccc; background: #fff; display: flex; justify-content: space-between; align-items: center; }
+    #app-container { display: flex; flex-grow: 1; min-height: 0; }
+    #sidebar-container { width: 280px; padding: 15px; border-right: 1px solid #ccc; background: #f7f7f7; box-sizing: border-box; overflow-y: auto; }
+    #mainbody-container { flex-grow: 1; position: relative; }
+    #footer-container { padding: 10px; border-top: 1px solid #ccc; background: #f0f0f0; text-align: center; }
+    .field-group { margin-bottom: 15px; }
+    .field-group label { display: block; font-size: 0.8em; color: #666; margin-bottom: 3px; }
+    .field-group span, .field-group input, .field-group textarea { font-size: 1em; }
+    .field-group input, .field-group textarea { width: 100%; box-sizing: border-box; padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
+    .field-group textarea { min-height: 100px; resize: vertical; }
+    .label-bold { font-size: 1.4em; font-weight: bold; }
+    button.action-button { padding: 8px 12px; margin-left: 10px; border: 1px solid #888; background-color: #eee; cursor: pointer; }
+    button.action-button.primary { background-color: #28a745; color: white; border-color: #28a745; font-weight: bold; }
+    #sidebar-container button.action-button { width: 100%; margin: 10px 0 0 0; }
+  </style>
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+</head>
+<body>
+  <div id="header-container"></div>
+  <div id="app-container">
+    <div id="sidebar-container"></div>
+    <div id="mainbody-container"></div>
+  </div>
+  <div id="footer-container"></div>
+  <script src="frontend.js"></script>
+</body>
+</html>
