@@ -150,6 +150,8 @@ class SurgicalEditorLogic:
         if self.active_edit_task:
             queue_info['active_task_status'] = self.active_edit_task.get('status')
             queue_info['active_task_hint'] = self.active_edit_task.get('user_hint')
+
+        print(f"CORE_LOGIC (_notify_view_update): About to call update_view callback. Data: {self.data}, Config: {self.config_manager.get_config()}, QueueInfo: {queue_info}")
         # Pass the raw dict from the config manager to the view
         self.callbacks['update_view'](self.data, self.config_manager.get_config(), queue_info)
 
@@ -441,7 +443,7 @@ class SurgicalEditorLogic:
             })
         self._notify_view_update() # Ensure UI reflects changes from the action
 
-    def handle_approve_main_content(self, payload: Dict[str, Any])
+    def handle_approve_main_content(self, payload: Dict[str, Any]):
         """
         Handler for 'approve_main_content' action.
         Updates the main text field and potentially other fields from the payload.

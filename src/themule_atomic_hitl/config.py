@@ -32,12 +32,17 @@ DEFAULT_CONFIG = {
 class Config:
     """
     Manages the configuration for the HITL tool.
-    It loads a default configuration and can override it with a user-provided JSON file.
+    It loads a default configuration and can override it with a user-provided JSON file or dictionary.
     """
-    def __init__(self, custom_config_path: Optional[str] = None):
+    def __init__(self,
+                 custom_config_path: Optional[str] = None,
+                 custom_config_dict: Optional[Dict[str, Any]] = None):
         self._config = self._load_default_config()
 
-        if custom_config_path:
+        if custom_config_dict: # Prioritize dict if provided
+            # Ensure deep copy of custom_config_dict before merging to avoid modifying original dict
+            self._config = self._merge_configs(self._config, json.loads(json.dumps(custom_config_dict)))
+        elif custom_config_path:
             custom_config = self._load_custom_config(custom_config_path)
             if custom_config:
                 self._config = self._merge_configs(self._config, custom_config)

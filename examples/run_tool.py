@@ -1,4 +1,15 @@
 # examples/run_tool.py
+import faulthandler
+faulthandler.enable()
+import sys # For flushing stdout
+import logging
+
+logging.basicConfig(filename='debug_tool_run.log', level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
+                    filemode='w') # Overwrite log file each run
+
+logging.debug("RUN_TOOL.PY: Script starting, faulthandler and logging enabled.")
+print("RUN_TOOL.PY: Script starting", flush=True) # Keep print for immediate console feedback
 """
 
 This script serves as an example of how to use the TheMule Atomic HITL tool
@@ -35,16 +46,17 @@ try:
     from src.themule_atomic_hitl.config import Config # Though hitl_node_run handles Config internally
 except ImportError:
     print("Attempting to run from source directory by adjusting Python path...")
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # project_root should be the parent of 'examples' and 'src'
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     if project_root not in sys.path:
-        sys.path.insert(0, project_root)
+        sys.path.insert(0, project_root) # Add project root to allow `from src...`
     try:
         from src.themule_atomic_hitl import hitl_node_run
-        from src.themule_atomic_hitl.runner import _load_json_file # Corrected import
+        from src.themule_atomic_hitl.runner import _load_json_file
         from src.themule_atomic_hitl.config import Config
-        print(f"Successfully imported components from source directory: {project_root}")
+        print(f"Successfully imported components by adding project root to sys.path: {project_root}")
     except ImportError as e:
-        print(f"Failed to import components from source directory: {project_root}")
+        print(f"Failed to import components after adding project root ({project_root}) to sys.path: {e}")
         print("Please ensure that the script is run from the project root or that the package is installed.")
         sys.exit(1)
 
@@ -53,16 +65,21 @@ if __name__ == "__main__":
 
     current_dir = os.path.dirname(os.path.abspath(__file__)) # Directory of this script
 
-    print("Starting HITL example demonstrations...")
+    print("Starting HITL example demonstrations...", flush=True)
 
     # --- Example 1: Using hitl_node_run with a simple string content and default config ---
-    print("\n--- Example 1: Running HITL with simple string content (default config) ---")
+    print("\n--- Example 1: Running HITL with simple string content (default config) ---", flush=True)
     simple_text_content = "This is the initial text. It needs some review and potential edits from the user."
 
     # hitl_node_run handles QApplication internally if not provided
+    print("RUN_TOOL.PY: About to call hitl_node_run for Example 1", flush=True)
+    logging.debug("RUN_TOOL.PY: About to call hitl_node_run for Example 1")
     final_data_simple = hitl_node_run(content_to_review=simple_text_content)
+    logging.debug(f"RUN_TOOL.PY: hitl_node_run for Example 1 returned: {type(final_data_simple)}")
+    print("RUN_TOOL.PY: hitl_node_run for Example 1 returned", flush=True)
 
     if final_data_simple:
+        logging.debug(f"RUN_TOOL.PY: Example 1 success, data: {final_data_simple}")
         print("\n--- Result from Example 1 (simple string) ---")
         print(json.dumps(final_data_simple, indent=2))
     else:

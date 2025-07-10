@@ -6,6 +6,11 @@ It sets up the main window, the web engine view, and the communication
 channel (QWebChannel) between the Python backend (SurgicalEditorLogic)
 and the JavaScript frontend.
 """
+import logging
+logger = logging.getLogger(__name__)
+# The first logger.debug will only appear if basicConfig was called before this module is imported.
+# If examples/run_tool.py is the entry point and configures logging first, this is fine.
+logger.debug("RUNNER.PY: Module imported/loaded")
 
 import sys
 import os
@@ -60,7 +65,7 @@ class Backend(QObject):
     """
 
     # Signal to update the entire view in JavaScript
-    updateViewSignal = pyqtSignal(dict, dict, dict, name="updateView")
+    updateViewSignal = pyqtSignal(object, object, object, name="updateView") # dict -> object
 
     # Signal to show a diff preview in JavaScript
 
@@ -74,7 +79,7 @@ class Backend(QObject):
 
     # Signal to prompt the user to confirm the location of a snippet found by the locator
 
-    promptUserToConfirmLocationSignal = pyqtSignal(dict, str, str, name="promptUserToConfirmLocation")
+    promptUserToConfirmLocationSignal = pyqtSignal(object, str, str, name="promptUserToConfirmLocation") # dict -> object
 
     # Signal to indicate session termination, so the calling function can retrieve data
     sessionTerminatedSignal = pyqtSignal()
@@ -144,15 +149,26 @@ class Backend(QObject):
 
     # --- Slots called by JavaScript UI to drive the Core Logic (SurgicalEditorLogic) ---
 
-    @pyqtSlot(result=dict)
-    def getInitialPayload(self) -> Dict[str, Any]:
+    @pyqtSlot(result=str)
+    def getInitialPayload(self) -> str:
         """
         Slot called by JS on startup to get the initial data and config.
         Returns:
-            Dict[str, Any]: A dictionary containing the initial 'config' (as dict) and 'data'.
+            str: A JSON string representing the config and data.
         """
-        # Pass the raw dict from config manager
-        return {"config": self.logic.config_manager.get_config(), "data": self.logic.data}
+        logger.debug("BACKEND (getInitialPayload): Called by JavaScript.")
+        config_data = self.logic.config_manager.get_config() # This is already a dict
+        data_data = self.logic.data # This is a dict
+        logger.debug(f"BACKEND (getInitialPayload): Config type: {type(config_data)}, Data type: {type(data_data)}")
+        payload = {"config": config_data, "data": data_data}
+        try:
+            json_payload = json.dumps(payload)
+            logger.debug(f"BACKEND (getInitialPayload): Returning JSON string payload (length: {len(json_payload)}).")
+            return json_payload
+        except Exception as e:
+            logger.error(f"BACKEND (getInitialPayload): Error during json.dumps: {e}")
+            # Return a JSON string indicating an error, so JS can still parse it
+            return json.dumps({"error": str(e), "message": "Failed to serialize payload in getInitialPayload"})
 
 
     @pyqtSlot()
@@ -160,7 +176,19 @@ class Backend(QObject):
         """
         Slot called by JS to start the editing session in the core logic.
         """
-        self.logic.start_session()
+        logger.debug("BACKEND (startSession): Called by JavaScript.")
+        try:
+            self.logic.start_session()
+            logger.debug("BACKEND (startSession): self.logic.start_session() returned.")
+        except Exception as e:
+            logger.error(f"BACKEND (startSession): Error during self.logic.start_session(): {e}")
+            # If self.showErrorSignal is available and connected, emit it
+            if hasattr(self, 'showErrorSignal') and self.showErrorSignal is not None:
+                 try:
+                     self.showErrorSignal.emit(f"Error in startSession: {str(e)}")
+                 except Exception as sig_e:
+                     logger.error(f"BACKEND (startSession): Error emitting showErrorSignal: {sig_e}")
+
 
     @pyqtSlot(str, str)
     def submitEditRequest(self, hint: str, instruction: str):
@@ -242,7 +270,7 @@ class MainWindow(QMainWindow):
     """
     def __init__(self,
                  initial_data: Dict[str, Any],
-                 config_manager: Config, # Uses Config object
+                 config_dict_param: Dict[str, Any], # Changed
                  app_instance: QApplication, # Expects the QApplication instance
                  parent: Optional[QObject] = None):
 
@@ -251,28 +279,29 @@ class MainWindow(QMainWindow):
 
         Args:
             initial_data (Dict[str, Any]): The initial data for the editor.
-
-            config_manager (Config): The Config object for UI and behavior settings.
+            config_dict_param (Dict[str, Any]): The configuration dictionary. # Changed
             app_instance (QApplication): The current QApplication instance.
             parent (Optional[QObject]): The parent QObject, if any.
         """
         super().__init__(parent)
         self.app = app_instance # Store the app instance
-        self.config_manager = config_manager
-        self.setWindowTitle(self.config_manager.window_title) # Use Config object for title
-        self.setGeometry(100, 100, 1200, 800) # x, y, width, height
 
-        self.view = QWebEngineView() # The widget that will display the HTML/JS UI
-        self.channel = QWebChannel() # Facilitates communication between Python and JS
+        # Create Config object from the dictionary
+        self.config_manager = Config(custom_config_dict=config_dict_param) # Use custom_config_dict
+
+        self.setWindowTitle(self.config_manager.window_title)
+        self.setGeometry(100, 100, 1200, 800)
+
+        self.view = QWebEngineView()
+        self.channel = QWebChannel()
 
         # Create the Backend instance, passing the Config object
-        self.backend = Backend(initial_data, self.config_manager, self) # Pass self as parent
-        self.backend.sessionTerminatedSignal.connect(self.on_session_terminated) # Connect the signal
+        self.backend = Backend(initial_data, self.config_manager, self)
+        self.backend.sessionTerminatedSignal.connect(self.on_session_terminated)
 
 
         # Register the backend object with the channel, making it accessible to JS
         self.channel.registerObject("backend", self.backend)
-        # Set the web channel on the web page
         self.view.page().setWebChannel(self.channel)
 
         # Construct the path to the index.html file for the frontend
@@ -314,7 +343,7 @@ class MainWindow(QMainWindow):
 # It's renamed from _load_data_file (my version) to _load_json_file (main's version) for consistency.
 
 def run_application(initial_data_param: Dict[str, Any],
-                      config_param: Config,
+                      config_param_dict: Dict[str, Any], # Changed
                       qt_app: Optional[QApplication] = None) -> Optional[Union[Dict[str,Any], QMainWindow]]:
     """
     Main function to set up and run the PyQt5 application GUI.
@@ -323,7 +352,7 @@ def run_application(initial_data_param: Dict[str, Any],
 
     Args:
         initial_data_param (Dict[str, Any]): The initial data dictionary.
-        config_param (Config): The Config object for UI and behavior settings.
+        config_param_dict (Dict[str, Any]): The configuration dictionary. # Changed
         qt_app (Optional[QApplication]): Optional existing QApplication instance.
             If None, a new one is created and its event loop is executed.
             If provided, this function will not run the event loop.
@@ -335,49 +364,57 @@ def run_application(initial_data_param: Dict[str, Any],
             - If `qt_app` is provided (external app loop): Returns the MainWindow instance,
               or None if an error occurred. The caller is responsible for the event loop.
     """
+    logger.debug("RUNNER.PY: run_application called.")
+    logger.debug(f"RUNNER.PY: run_application initial_data type: {type(initial_data_param)}, config_param_dict type: {type(config_param_dict)}, qt_app type: {type(qt_app)}")
     if not initial_data_param:
-        print(f"Error: Initial data is empty. Application cannot start.")
+        logger.error("RUNNER.PY: Initial data is empty. Application cannot start.")
         return None
 
     app = qt_app
     created_new_app = False
-    if app is None:
-        app = QApplication.instance() # Check if an instance already exists
-        if app is None:
-            print("run_application: Creating new QApplication instance.")
-            app = QApplication(sys.argv)
-            created_new_app = True
-        else:
-            print("run_application: Using existing QApplication instance found by QApplication.instance().")
-    else:
-        print("run_application: Using provided existing QApplication instance.")
+    app_instance_to_use = qt_app
+    should_run_event_loop_here = False
 
-    if app is None: # Should not happen if QApplication(sys.argv) was successful
-        print("Error: Could not obtain/create QApplication instance.")
+    if app_instance_to_use is None:
+        app_instance_to_use = QApplication.instance()
+        if app_instance_to_use is None:
+            logger.debug("RUNNER.PY: No existing QApplication found, creating new instance.")
+            app_instance_to_use = QApplication([]) # Use empty list
+            should_run_event_loop_here = True
+        else:
+            logger.debug("RUNNER.PY: Using existing QApplication instance found by QApplication.instance(). Event loop assumed managed externally or by prior call.")
+            should_run_event_loop_here = False
+    else:
+        logger.debug("RUNNER.PY: Using provided existing QApplication instance. Event loop managed by caller.")
+        should_run_event_loop_here = False
+
+    if app_instance_to_use is None:
+        logger.error("RUNNER.PY: Could not obtain/create QApplication instance.")
         return None
 
+    logger.debug("RUNNER.PY: Creating MainWindow instance.")
     main_window = MainWindow(
         initial_data=initial_data_param,
-        config_manager=config_param,
-        app_instance=app
+        config_dict_param=config_param_dict, # Pass dict
+        app_instance=app_instance_to_use
     )
-    main_window.show() # Display the main window
+    logger.debug("RUNNER.PY: MainWindow instance created. Calling show().")
+    main_window.show()
+    logger.debug("RUNNER.PY: MainWindow.show() called.")
 
-    if created_new_app and qt_app is None: # Only run exec_ if we created the app AND no app was passed in
-        print("run_application: Starting new QApplication event loop.")
-        # exit_code = app.exec_() # This would block and wait for sys.exit
-        # For library function, better to let it run and return data after close
-        app.exec_() # Run event loop; MainWindow.close() will stop it.
-        print(f"run_application: QApplication event loop finished.")
-        return main_window.backend.logic.get_final_data() # Return final data after UI closes
-    else: # Existing app instance was provided or found, or we are not to block here
-        print("run_application: Not starting new event loop (or using existing), assuming external management for event loop if qt_app was provided.")
-        return main_window # Return the window instance for the caller to manage
+    if should_run_event_loop_here:
+        logger.debug("RUNNER.PY: Starting new QApplication event loop (blocking).")
+        app_instance_to_use.exec_()
+        logger.debug("RUNNER.PY: QApplication event loop finished.")
+        return main_window.backend.logic.get_final_data()
+    else:
+        logger.debug("RUNNER.PY: Returning MainWindow instance; event loop managed by caller or already running.")
+        return main_window
 
 
 # Example of how to run this for standalone mode (illustrative, actual call from hitl_node.py or examples script)
 if __name__ == '__main__':
-    print("runner.py executed directly (for illustration of standalone-like execution).")
+    logger.info("runner.py executed directly (for illustration of standalone-like execution).")
 
     # This example demonstrates how one might call run_application if it were
     # the primary entry point, similar to how hitl_node_run would use it.

@@ -34,11 +34,15 @@ def hitl_node_run(
         A dictionary containing the final state of the data after user interaction,
         or None if the application could not be started or an error occurred.
     """
+    print("HITL_NODE_RUN_PYTHON: Entry point", flush=True)
     final_data: Optional[Dict[str, Any]] = None # Initialize final_data
     try:
+        print("HITL_NODE_RUN_PYTHON: Inside try block, before Config init", flush=True)
         # 1. Initialize Configuration
         config_manager = Config(custom_config_path=custom_config_path)
+        print(f"HITL_NODE_RUN_PYTHON: Config object initialized: {type(config_manager)}", flush=True)
         config_dict = config_manager.get_config() # For easier access to keys
+        print(f"HITL_NODE_RUN_PYTHON: config_dict obtained: {type(config_dict)}", flush=True)
 
         # 2. Prepare Initial Data
         initial_data: Dict[str, Any] = {}
@@ -67,71 +71,45 @@ def hitl_node_run(
             print("Error: content_to_review must be a string or a dictionary.")
             return None
 
-        # 3. Manage QApplication instance
-        app = existing_qt_app
-        app_created_here = False
-        if app is None:
-            app = QApplication.instance()
-            if app is None:
-                print("hitl_node_run: Creating new QApplication instance.")
-                app = QApplication(sys.argv)
-                app_created_here = True
-            # else:
-                # print("hitl_node_run: Using existing QApplication instance found by QApplication.instance().")
-        # else:
-            # print("hitl_node_run: Using provided existing QApplication instance.")
+        # The old QApplication management logic (previously here) has been removed.
+        # The new logic is integrated below using run_application's refined behavior.
 
-        if app is None: # Should not happen if QApplication(sys.argv) was successful
-            print("Error: Could not obtain QApplication instance.")
-            return None
-
-        # 4. Run the application UI
-        # run_application will handle its own loop if app_created_here is True (i.e., existing_qt_app was None)
-        # and it will return the final data.
-        # If existing_qt_app was provided, run_application returns the main_window,
-        # and this function would need to become async or handle event loop differently.
-        # For a synchronous library call, we want run_application to block until UI is done.
-
-        # The refactored run_application is expected to return final_data if it manages the loop,
-        # or the main_window if the loop is external.
-        # For hitl_node_run to be a simple blocking call, it should ensure it passes None for qt_app
-        # if it created the app, so run_application starts its own blocking event loop.
-
-        if app_created_here:
-            final_data = run_application(initial_data_param=initial_data, config_param=config_manager, qt_app=None)
-            # QApplication.quit() # Ensure app quits if created here - run_application's exec_ should handle this.
-        else:
-            # If using an existing app, the caller manages the event loop.
-            # This scenario makes hitl_node_run non-blocking by default with current run_application.
-            # To make it blocking, we'd need to start a local event loop here,
-            # or have run_application always block.
-            # For LangGraph, a blocking call is usually preferred.
-            # The run_application will return final_data IF qt_app is None
-            print("hitl_node_run: Running with existing Qt app. The function will return after UI is shown.")
-            print("The caller is responsible for the Qt event loop.")
-            print("For a blocking call in this scenario, further adaptation of run_application or this function is needed.")
-            # This is a tricky part: if the external app is running its loop, how do we get the result back *here*?
-            # Option A: run_application is always blocking (e.g. uses QEventLoop locally if qt_app is passed)
-            # Option B: hitl_node_run returns a future or uses callbacks if used with existing_qt_app
-            # For now, let's assume if existing_qt_app is passed, the user knows what they're doing
-            # and might not get an immediate return value in a simple synchronous way.
-            # However, the plan implies this function returns the final data.
-            # Let's adjust run_application to always try to be blocking or make this clear.
-            # The current run_application returns final_data if qt_app is None.
-            # If qt_app is not None, it returns main_window.
-            # To make this function blocking and return data when existing_qt_app is provided:
-            main_window_instance = run_application(initial_data_param=initial_data, config_param=config_manager, qt_app=app)
-            print(f"DEBUG_HITL_NODE: main_window_instance from run_application is: {main_window_instance} (type: {type(main_window_instance)})")
-            if main_window_instance:
-                # If using an existing app, runner.run_application returns the MainWindow instance.
-                # We must wait for it to finish using a QEventLoop tied to its sessionTerminatedSignal.
-                print("hitl_node_run: Using existing QApplication. Waiting for session to terminate...")
-                event_loop = QApplication.QEventLoop()
-                main_window_instance.backend.sessionTerminatedSignal.connect(event_loop.quit)
-                main_window_instance.show() # Ensure the window is shown so it can be interacted with / closed.
-                event_loop.exec_() # This blocks until event_loop.quit() is called by the signal.
+        if existing_qt_app:
+            print("hitl_node_run: Using provided existing QApplication.")
+            returned_value_from_runner = run_application(
+                initial_data_param=initial_data,
+                config_param_dict=config_dict, # Pass the dict
+                qt_app=existing_qt_app
+            )
+            if isinstance(returned_value_from_runner, QMainWindow):
+                main_window_instance = returned_value_from_runner
+                print("hitl_node_run: Existing QApplication mode. Waiting for session to terminate via local event loop...")
+                local_event_loop = QApplication.QEventLoop()
+                main_window_instance.backend.sessionTerminatedSignal.connect(local_event_loop.quit)
+                if not main_window_instance.isVisible():
+                    main_window_instance.show()
+                local_event_loop.exec_()
                 final_data = main_window_instance.backend.logic.get_final_data()
-            else: # If main_window_instance is None (e.g., run_application failed to return a window)
+                print("hitl_node_run: Session terminated, local event loop finished.")
+            elif returned_value_from_runner is None:
+                 print("hitl_node_run: run_application returned None with existing_qt_app.")
+                 final_data = None
+            else:
+                print(f"hitl_node_run: Unexpected return type {type(returned_value_from_runner)} from run_application with existing_qt_app.")
+                final_data = None
+        else: # No existing_qt_app provided
+            print("hitl_node_run: No existing QApplication provided. run_application will manage its own if needed.")
+            returned_value_from_runner = run_application(
+                initial_data_param=initial_data,
+                config_param_dict=config_dict, # Pass the dict
+                qt_app=None
+            )
+            if isinstance(returned_value_from_runner, dict):
+                final_data = returned_value_from_runner
+            elif returned_value_from_runner is None:
+                 final_data = None
+            else:
+                print(f"hitl_node_run: Unexpected return type {type(returned_value_from_runner)} from run_application when qt_app is None.")
                 final_data = None
 
         return final_data
