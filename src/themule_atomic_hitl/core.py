@@ -4,6 +4,7 @@ import uuid
 import json
 from typing import Callable, Dict, Any, Optional, Tuple
 from collections import deque
+from .config import Config # Import the new Config class
 
 class SurgicalEditorLogic:
     """
@@ -13,29 +14,28 @@ class SurgicalEditorLogic:
     """
     def __init__(self,
                  initial_data: Dict[str, Any],
-                 config: Dict[str, Any],
+                 config: Config, # Changed to use Config object
                  callbacks: Dict[str, Callable]):
         self.data = initial_data
-        self._initial_data_snapshot = json.loads(json.dumps(initial_data))
-        self.config = config
+        self._initial_data_snapshot = json.loads(json.dumps(initial_data)) # Deep copy for revert
+        self.config_manager = config # Store the Config object
         self.edit_results = []
         self.callbacks = callbacks
 
         self.edit_request_queue: deque[Tuple[str, str, str]] = deque()
         self.active_edit_task: Optional[Dict[str, Any]] = None
 
-        self.main_text_field = None
-        self.original_text_field = None
-        if self.config.get('fields'):
-            for field_config in self.config['fields']:
-                if field_config.get('type') == 'diff-editor':
-                    self.main_text_field = field_config.get('modifiedDataField')
-                    self.original_text_field = field_config.get('originalDataField')
-                    break
-        if not self.main_text_field:
-            print("Warning: No 'diff-editor' with 'modifiedDataField' found in config.")
-            self.main_text_field = "editedText"
-            self.original_text_field = "originalText"
+        # Use properties from Config object
+        self.main_text_field = self.config_manager.main_editor_modified_field
+        self.original_text_field = self.config_manager.main_editor_original_field
+
+        # Ensure initial data has the necessary fields if they are missing
+        if self.main_text_field not in self.data:
+            self.data[self.main_text_field] = ""
+        if self.original_text_field not in self.data:
+            # If original is not provided, snapshot the initial state of modified field as original
+             self.data[self.original_text_field] = self.data[self.main_text_field]
+
 
     @property
     def current_main_content(self) -> str:
@@ -45,7 +45,22 @@ class SurgicalEditorLogic:
     def current_main_content(self, value: str):
         self.data[self.main_text_field] = value
 
+    def get_final_data(self) -> Dict[str, Any]:
+        """Returns the current state of the data, typically after session completion."""
+        return self.data
+
     def start_session(self):
+        # Ensure the original text field in data is correctly set from the snapshot
+        # if it wasn't set from initial_data directly for the diff editor.
+        # This is important if only 'editedText' was provided initially.
+        if self.original_text_field not in self._initial_data_snapshot:
+             self._initial_data_snapshot[self.original_text_field] = self._initial_data_snapshot.get(self.main_text_field, "")
+
+        # Update self.data's original_text_field to match the snapshot if it's empty or different
+        # This ensures the UI's diff editor gets the correct original baseline
+        if self.data.get(self.original_text_field) != self._initial_data_snapshot.get(self.original_text_field):
+            self.data[self.original_text_field] = self._initial_data_snapshot.get(self.original_text_field, "")
+
         self._notify_view_update()
         self._process_next_edit_request()
 
@@ -57,7 +72,8 @@ class SurgicalEditorLogic:
         if self.active_edit_task:
             queue_info['active_task_status'] = self.active_edit_task.get('status')
             queue_info['active_task_hint'] = self.active_edit_task.get('user_hint')
-        self.callbacks['update_view'](self.data, self.config, queue_info)
+        # Pass the raw dict from the config manager to the view
+        self.callbacks['update_view'](self.data, self.config_manager.get_config(), queue_info)
 
     def add_edit_request(self, hint: str, instruction: str):
         print(f"CORE_LOGIC: Adding edit request. Hint='{hint}'")
