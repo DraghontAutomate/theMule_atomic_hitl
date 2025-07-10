@@ -1,8 +1,17 @@
 console.log("frontend.js starting");
 // Configure the AMD loader for Monaco editor.
 // This tells the loader where to find the editor's source files.
-// require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } }); // Commented out for now
+// require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } }); // Commented out for now - Monaco CDN loading issue
 
+/**
+ * Main application state object.
+ * @property {object} config - Loaded from Python backend. Defines UI structure.
+ * @property {object} data - Loaded from Python backend. Contains the actual data being edited.
+ * @property {object} widgets - Stores references to dynamically created UI elements (Monaco editors, input fields, labels).
+ * @property {object|null} api - Reference to the Python backend object exposed via QWebChannel.
+ * @property {object} ui - Stores references to static HITL (Human-in-the-Loop) UI elements from index.html.
+ * @property {object} activeTaskDetails - Stores details of the current HITL task.
+ */
 let app = {
   config: {},
   data: {},
@@ -12,6 +21,11 @@ let app = {
   activeTaskDetails: {}
 };
 
+/**
+ * Manages the visibility of different UI sections.
+ * @param {string} sectionId - The ID of the HTML element (section) to show or hide.
+ * @param {boolean} makeVisible - True to show the section, false to hide it.
+ */
 function showSection(sectionId, makeVisible) {
     const section = document.getElementById(sectionId);
     if (section) {
@@ -23,16 +37,22 @@ function showSection(sectionId, makeVisible) {
     }
 }
 
+/**
+ * Renders the configurable parts of the UI based on `app.config`.
+ * Creates input fields, labels, buttons, and potentially the Monaco diff editor.
+ * Attempts to preserve the main Monaco diff editor instance if it exists.
+ */
 function renderConfigurableUI() {
+  console.log("JS: renderConfigurableUI called. Current app.config:", app.config);
   const configurableContainers = ['header-container', 'sidebar-container', 'mainbody-container', 'footer-container'];
   let mainDiffEditorElement = null;
   const mainDiffWidgetConfig = app.config.fields?.find(f => f.type === 'diff-editor' && f.placement === 'mainbody');
   const mainDiffWidgetName = mainDiffWidgetConfig?.name || 'main_diff';
 
-  if (app.widgets[mainDiffWidgetName] && app.widgets[mainDiffWidgetName].instance) {
+  // Preserve existing Monaco editor instance if it's already in the DOM and valid
+  if (app.widgets[mainDiffWidgetName] && app.widgets[mainDiffWidgetName].instance && typeof app.widgets[mainDiffWidgetName].instance.getDomNode === 'function') {
       const mainBody = document.getElementById('mainbody-container');
-      // Check if getDomNode method exists, as instance might not be a Monaco editor if Monaco failed to load
-      const editorDomNode = app.widgets[mainDiffWidgetName].instance.getDomNode ? app.widgets[mainDiffWidgetName].instance.getDomNode() : null;
+      const editorDomNode = app.widgets[mainDiffWidgetName].instance.getDomNode();
       if (mainBody && editorDomNode && mainBody.contains(editorDomNode)) {
           mainDiffEditorElement = editorDomNode.parentElement;
       }
@@ -48,14 +68,15 @@ function renderConfigurableUI() {
                     container.removeChild(child);
                 }
             });
-        } else if (id !== 'mainbody-container') { // Also clear mainbody if no editor was preserved
-            container.innerHTML = '';
-        } else if (id === 'mainbody-container' && !mainDiffEditorElement) { // Explicitly clear mainbody if no editor preserved
-             container.innerHTML = '';
+        } else if (id !== 'mainbody-container' || (id === 'mainbody-container' && !mainDiffEditorElement) ) {
+             container.innerHTML = ''; // Clear if not mainbody, or if mainbody without preserved editor
         }
+    } else {
+        console.warn(`renderConfigurableUI: Container ID '${id}' not found in HTML.`);
     }
   });
 
+  const oldWidgets = app.widgets; // Keep a reference if needed for complex preservation, otherwise reset
   app.widgets = {};
 
   if (app.config.fields) {
@@ -67,11 +88,13 @@ function renderConfigurableUI() {
         }
 
         if (field.type === 'diff-editor') {
-            if (field.name === mainDiffWidgetName && mainDiffEditorElement && app.widgets[mainDiffWidgetName]?.instance?.getDomNode) { // Check if instance is a Monaco editor
-                app.widgets[field.name] = { type: 'diff-editor', instance: app.widgets[mainDiffWidgetName].instance, config: field };
+            // Attempt to reuse existing editor instance if it matches and was preserved
+            if (field.name === mainDiffWidgetName && mainDiffEditorElement && oldWidgets[mainDiffWidgetName]?.instance?.getDomNode) {
+                app.widgets[field.name] = oldWidgets[mainDiffWidgetName]; // Relink preserved widget
+                console.log(`JS: Re-linked preserved Monaco editor for '${field.name}'.`);
             } else {
                 const editorDiv = document.createElement('div');
-                editorDiv.id = `editor-${field.name}`; // Give a unique ID for potential targeting
+                editorDiv.id = `editor-${field.name}`;
                 if (field.placement === 'mainbody') {
                     editorDiv.style.height = "calc(100% - 120px)";
                     editorDiv.style.width = "100%";
@@ -83,18 +106,25 @@ function renderConfigurableUI() {
                 if (container) container.appendChild(editorDiv);
 
                 if (typeof monaco !== 'undefined' && typeof monaco.editor !== 'undefined') {
-                    const editor = monaco.editor.createDiffEditor(editorDiv, {
-                        automaticLayout: true,
-                        originalEditable: field.originalEditable === true,
-                        readOnly: field.readOnly === true
-                    });
-                    editor.setModel({
-                        original: monaco.editor.createModel('', field.language || 'text/plain'),
-                        modified: monaco.editor.createModel('', field.language || 'text/plain')
-                    });
-                    app.widgets[field.name] = { type: 'diff-editor', instance: editor, config: field };
+                    try {
+                        const editor = monaco.editor.createDiffEditor(editorDiv, {
+                            automaticLayout: true,
+                            originalEditable: field.originalEditable === true,
+                            readOnly: field.readOnly === true
+                        });
+                        editor.setModel({
+                            original: monaco.editor.createModel('', field.language || 'text/plain'),
+                            modified: monaco.editor.createModel('', field.language || 'text/plain')
+                        });
+                        app.widgets[field.name] = { type: 'diff-editor', instance: editor, config: field };
+                        console.log(`JS: Created new Monaco editor for '${field.name}'.`);
+                    } catch (e) {
+                        console.error("Error creating Monaco editor for field:", field.name, e);
+                        editorDiv.textContent = `Error creating Monaco editor for '${field.name}'. See console.`;
+                        app.widgets[field.name] = { type: 'diff-editor', instance: null, config: field, domElement: editorDiv };
+                    }
                 } else {
-                    console.warn("Monaco editor not available. Diff editor UI will not be created for field:", field.name);
+                    console.warn("Monaco editor API not available. Diff editor UI will be a placeholder for field:", field.name);
                     editorDiv.textContent = `Monaco editor for '${field.name}' could not be loaded.`;
                     app.widgets[field.name] = { type: 'diff-editor', instance: null, config: field, domElement: editorDiv };
                 }
@@ -134,15 +164,24 @@ function renderConfigurableUI() {
         button.className = 'action-button';
         if (action.isPrimary) button.classList.add('primary');
         button.onclick = () => {
+          if (!app.api) {
+            alert("Backend API not available. Action cannot be performed.");
+            console.error("PerformAction: app.api is not available.");
+            return;
+          }
           const payload = getPayloadFromUI(action);
-          if (app.api) app.api.performAction(action.name, payload);
+          app.api.performAction(action.name, payload);
         };
         container.appendChild(button);
     });
   }
 }
 
+/**
+ * Populates UI elements with data from `app.data`.
+ */
 function renderData() {
+  console.log("JS: renderData called. Current app.data:", app.data);
   for (const name in app.widgets) {
     const widget = app.widgets[name];
     const fieldConfig = widget.config;
@@ -150,10 +189,10 @@ function renderData() {
     if (widget.type === 'diff-editor') {
       const originalValue = app.data[fieldConfig.originalDataField] || '';
       const modifiedValue = app.data[fieldConfig.modifiedDataField] || '';
-      if (widget.instance && widget.instance.getModel) {
+      if (widget.instance && widget.instance.getModel) { // Monaco editor instance exists
           widget.instance.getModel().original.setValue(originalValue);
           widget.instance.getModel().modified.setValue(modifiedValue);
-      } else if (widget.domElement) {
+      } else if (widget.domElement) { // Placeholder div exists
           widget.domElement.textContent = `(Monaco N/A) Original: ${originalValue}\nModified: ${modifiedValue}`;
       }
     } else if (widget.type === 'field') {
@@ -169,21 +208,29 @@ function renderData() {
   const mainDiffConfig = app.config.fields?.find(f => f.type === 'diff-editor' && f.placement === 'mainbody');
   if (mainDiffConfig && app.widgets[mainDiffConfig.name]) {
       const editorWidget = app.widgets[mainDiffConfig.name];
-      const currentContent = app.data[mainDiffConfig.modifiedDataField] || '';
+      const currentModifiedContent = app.data[mainDiffConfig.modifiedDataField] || '';
+      // The original content for diff should ideally come from a snapshot or the originalDataField
+      const currentOriginalContent = app.data[mainDiffConfig.originalDataField] || currentModifiedContent;
+
       if (!app.activeTaskDetails || !app.activeTaskDetails.status ||
           (app.activeTaskDetails.status !== 'awaiting_diff_approval' &&
-           app.activeTaskDetails.status !== 'awaiting_location_confirmation' &&
-           app.activeTaskDetails.status !== 'locating_snippet')) {
+           app.activeTaskDetails.status !== 'awaiting_location_confirmation')) {
           if (editorWidget.instance && editorWidget.instance.getModel) {
-              editorWidget.instance.getModel().original.setValue(currentContent);
-              editorWidget.instance.getModel().modified.setValue(currentContent);
+              // When idle, show current state or make original and modified same
+              editorWidget.instance.getModel().original.setValue(currentOriginalContent);
+              editorWidget.instance.getModel().modified.setValue(currentModifiedContent);
           } else if (editorWidget.domElement) {
-              editorWidget.domElement.textContent = `(Monaco N/A) Current Content: ${currentContent}`;
+              editorWidget.domElement.textContent = `(Monaco N/A) Original: ${currentOriginalContent}\nModified: ${currentModifiedContent}`;
           }
       }
   }
 }
 
+/**
+ * Collects data from UI input fields to be sent as a payload with an action.
+ * @param {object} action - The action object from `app.config.actions`.
+ * @returns {object} payload - An object containing data from relevant UI fields.
+ */
 function getPayloadFromUI(action) {
   const payload = {};
   for (const name in app.widgets) {
@@ -204,6 +251,9 @@ function getPayloadFromUI(action) {
   return payload;
 }
 
+/**
+ * Initializes references to static HITL UI elements and sets up their event listeners.
+ */
 function initializeHitlUIElements() {
     app.ui.btnApproveEndSession = document.getElementById('btn-approve-end-session');
     app.ui.btnRequestNewEdit = document.getElementById('btn-request-new-edit');
@@ -231,6 +281,7 @@ function initializeHitlUIElements() {
         app.ui.btnApproveEndSession.onclick = () => {
             if (confirm("Are you sure you want to approve and end the session?")) {
                 if (app.api) app.api.terminateSession();
+                else console.error("TerminateSession: app.api not available.");
             }
         };
     }
@@ -279,12 +330,13 @@ function initializeHitlUIElements() {
         app.ui.btnConfirmLocation.onclick = () => {
             if (app.api && app.activeTaskDetails && app.activeTaskDetails.location_info) {
                 app.api.submitConfirmedLocationAndInstruction(app.activeTaskDetails.location_info, app.activeTaskDetails.user_instruction);
-            }
+            } else if (!app.api) console.error("ConfirmLocation: app.api not available.");
         };
     }
     if (app.ui.btnCancelLocationStage) {
         app.ui.btnCancelLocationStage.onclick = () => {
             if (app.api) app.api.submitLLMTaskDecision('cancel');
+            else console.error("CancelLocationStage: app.api not available.");
         };
     }
     if (app.ui.btnApproveThisEdit) {
@@ -298,16 +350,19 @@ function initializeHitlUIElements() {
                 contentToApprove = app.activeTaskDetails.llmProposedSnippet;
             }
             if (app.api) app.api.submitLLMTaskDecisionWithEdit('approve', contentToApprove);
+            else console.error("ApproveThisEdit: app.api not available.");
         };
     }
     if (app.ui.btnRefineThisEdit) {
         app.ui.btnRefineThisEdit.onclick = () => {
             if (app.api) app.api.submitLLMTaskDecision('reject');
+            else console.error("RefineThisEdit: app.api not available.");
         };
     }
     if (app.ui.btnDiscardThisEdit) {
         app.ui.btnDiscardThisEdit.onclick = () => {
             if (app.api) app.api.submitLLMTaskDecision('cancel');
+            else console.error("DiscardThisEdit: app.api not available.");
         };
     }
 }
@@ -327,10 +382,9 @@ function initializeHitlUIElements() {
           return;
       }
       app.api = channel.objects.backend;
-      console.error("JS: app.api (backend object) received (as error log):", app.api); // Changed to console.error
+      console.log("JS: app.api (backend object) received:", app.api);
       initializeHitlUIElements();
 
-      // --- Connect Python signals to JavaScript handlers ---
       console.log("JS: Attempting to connect signals...");
 
       if (app.api && app.api.updateViewSignal) {
@@ -338,7 +392,7 @@ function initializeHitlUIElements() {
               console.log("JS: updateViewSignal received (raw data):", data, config, queue_info);
             app.data = data;
             app.config = config;
-            if (Object.keys(app.widgets).length === 0 || JSON.stringify(app.config) !== JSON.stringify(config)) {
+            if (Object.keys(app.widgets).length === 0 || JSON.stringify(app.config) !== JSON.stringify(config)) { // Basic check
                  renderConfigurableUI();
             }
             renderData();
