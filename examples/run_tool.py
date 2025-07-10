@@ -31,7 +31,7 @@ import json # For loading data and printing results
 try:
     # Attempt to import assuming the package is installed or src is already in path
     from src.themule_atomic_hitl import hitl_node_run
-    from src.themule_atomic_hitl.runner import _load_data_file # Helper for loading JSON data
+    from src.themule_atomic_hitl.runner import _load_json_file # Helper for loading JSON data
     from src.themule_atomic_hitl.config import Config # Though hitl_node_run handles Config internally
 except ImportError:
     print("Attempting to run from source directory by adjusting Python path...")
@@ -40,7 +40,7 @@ except ImportError:
         sys.path.insert(0, project_root)
     try:
         from src.themule_atomic_hitl import hitl_node_run
-        from src.themule_atomic_hitl.runner import _load_data_file
+        from src.themule_atomic_hitl.runner import _load_json_file # Corrected import
         from src.themule_atomic_hitl.config import Config
         print(f"Successfully imported components from source directory: {project_root}")
     except ImportError as e:
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         print(f"Error: Sample data file not found at {sample_data_file_path}. Skipping Example 2.")
     else:
         print(f"Using sample data file: {sample_data_file_path}")
-        loaded_dict_content = _load_data_file(sample_data_file_path) # Using the helper from runner
+        loaded_dict_content = _load_json_file(sample_data_file_path) # Using the corrected helper from runner
         if loaded_dict_content:
             final_data_dict = hitl_node_run(content_to_review=loaded_dict_content)
             if final_data_dict:

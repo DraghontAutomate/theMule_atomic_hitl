@@ -20,8 +20,6 @@ from PyQt5.QtWebChannel import QWebChannel
 from .core import SurgicalEditorLogic
 from .config import Config # Import the new Config class
 
-from .config import Config # Import the new Config class
-
 # Using main's _load_json_file for now as it's more robust with error handling
 
 def _load_json_file(path: str) -> Dict[str, Any]:
