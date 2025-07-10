@@ -1,0 +1,103 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+*.venv
+env/
+venv/
+ENV/
+VENV/
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.log
+*.pot
+*.mo
+instance/
+.webassets-cache
+.hypothesis/
+# PyDev
+*.pydevproject
+# VS Code
+.vscode/
+# PyCharm
+.idea/
+*.iml
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Node.js / JavaScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+# Common JS build outputs
+dist/
+lib/
+# IDE files
+.DS_Store
+Thumbs.db
+# Optional: Common test coverage folder for JS
+coverage/
+# Optional: Bundler outputs if used
+.parcel-cache/
+.cache/
+# Optional: Log files
+*.log
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+# Optional: Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# Optional: Yarn Integrity file
+.yarnclean
+# Optional: TypeScript build outputs
+*.tsbuildinfo
+# Optional: Next.js specific
+.next/
+out/
+# Optional: Nuxt.js specific
+.nuxt/
+# Optional: Gatsby specific
+.cache/
+public/
+# Optional: Svelte specific
+.svelte-kit/
+# Optional: Vue specific
+.vite/
+# Optional: Angular specific
+.angular/

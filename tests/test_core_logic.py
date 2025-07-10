@@ -20,8 +20,10 @@ import `core` module directly after adjusting `sys.path`.
 
 import sys
 import os
+
 import unittest # Standard Python unit testing framework
 from unittest.mock import MagicMock # For creating mock objects for callbacks
+import json # Added for temp config file
 
 # --- Path Adjustment for Importing from `src` ---
 # This ensures that the `src` directory is in Python's import path,
@@ -38,28 +40,29 @@ sys.path.insert(0, project_root) # Add project root (e.g., /path/to/repo) to the
 # If a ModuleNotFoundError occurs specifically because of PyQt5, it tries a more
 # direct import of the `core.py` file itself.
 
+
 try:
     # Standard way to import if project structure allows and __init__ is minimal
     from src.themule_atomic_hitl.core import SurgicalEditorLogic
+    from src.themule_atomic_hitl.config import Config # Import Config class
 except ModuleNotFoundError as e:
-    # Check if the error is due to PyQt5 not being found (often occurs in CI or minimal envs)
-    if 'PyQt5' in str(e):
-        print("PyQt5 not found (expected for core logic tests), attempting direct import of core.py...")
+
+    if 'PyQt5' in str(e): # Check if PyQt5 is the cause of ModuleNotFoundError
+        print("PyQt5 not found, or other import error. Attempting to adjust path for core logic testing...")
+        # This path adjustment assumes tests are run from the project root or similar context
+        # where 'src' is a direct subdirectory.
         # Construct path to `src/themule_atomic_hitl` directory
-        core_module_dir = os.path.join(project_root, "src", "themule_atomic_hitl")
-        if core_module_dir not in sys.path:
-             sys.path.insert(0, core_module_dir) # Add it to path if not already there
-        try:
-            import core # Attempt to import `core.py` directly (becomes a module named 'core')
-            SurgicalEditorLogic = core.SurgicalEditorLogic # Assign the class
-            print("Successfully imported SurgicalEditorLogic via direct core.py import.")
-        except ImportError as ie:
-            print(f"Direct import of core.py failed: {ie}")
-            print("Ensure core.py exists and is importable.")
-            raise ie # Re-raise the import error if direct import fails
+        core_module_path = os.path.join(project_root, "src")
+        if core_module_path not in sys.path:
+            sys.path.insert(0, core_module_path) # Add 'src' to path
+
+        # Try importing again after path adjustment
+        from themule_atomic_hitl.core import SurgicalEditorLogic
+        from themule_atomic_hitl.config import Config
+        print("Successfully imported SurgicalEditorLogic and Config after path adjustment.")
     else:
-        # If ModuleNotFoundError is for something else, re-raise it
-        print(f"Unexpected ModuleNotFoundError: {e}")
+        # If the error is not related to PyQt5, re-raise it.
+        print(f"Encountered an unexpected ImportError: {e}")
         raise e
 
 
@@ -83,37 +86,54 @@ class TestSurgicalEditorLogic(unittest.TestCase):
             'confirm_location_details': MagicMock() # For the location confirmation step
         }
 
-        # Sample initial data for the editor
-        self.initial_data = {
-            "document_text": "This is the initial document content.", # Main text field
-            "version": 1.0,
-            "author": "TestUser"
-        }
 
-        # Sample configuration for the editor
-        self.config = {
+        # Sample initial data for the editor
+        self.sample_initial_data = { # Renamed for clarity
+            "document_text": "This is the initial document content.", # This will be 'modifiedDataField'
+            "original_doc": "This is the initial document content.", # This will be 'originalDataField'
+        
+
+        # This dictionary will be used to create a Config object
+        self.sample_config_dict = {
             "fields": [
-                # Configures 'document_text' as the main editable diff field
-                {"name": "document_text", "type": "diff-editor", "originalDataField": "original_doc", "modifiedDataField": "document_text"},
+                # Ensure this matches what SurgicalEditorLogic expects via Config properties
+                {"name": "diff_editor_main", "type": "diff-editor",
+                 "originalDataField": "original_doc", "modifiedDataField": "document_text"},
+
                 {"name": "author", "type": "text-input", "label": "Author"},
                 {"name": "version", "type": "label", "label": "Version"}
             ],
             "actions": [ # Generic actions available in the UI
                 {"name": "increment_version", "label": "Increment Version"},
                 {"name": "revert_changes", "label": "Revert All Changes"}
-            ]
+            ],
+            "settings": { # Add settings for completeness if Config expects it
+                "defaultWindowTitle": "Test Window"
+            }
         }
 
-        # Create an instance of SurgicalEditorLogic for testing
-        # Pass copies of initial_data and config to ensure test isolation
+        # Create a temporary custom config file to initialize Config object properly
+        self.temp_config_file_path = "temp_test_core_config.json"
+        with open(self.temp_config_file_path, 'w') as f:
+            json.dump(self.sample_config_dict, f)
+
+        # Initialize Config object using the temporary file
+        self.config_object = Config(custom_config_path=self.temp_config_file_path)
+
         self.editor_logic = SurgicalEditorLogic(
-            initial_data=dict(self.initial_data),
-            config=dict(self.config),
+            initial_data=dict(self.sample_initial_data), # Pass a copy
+            config=self.config_object,                   # Pass the Config object
+
             callbacks=self.mock_callbacks
         )
         # Reset mocks before each test to ensure clean state for call counts, etc.
         for mock_func in self.mock_callbacks.values():
             mock_func.reset_mock()
+
+    def tearDown(self):
+        """Clean up after each test."""
+        if os.path.exists(self.temp_config_file_path):
+            os.remove(self.temp_config_file_path)
 
     def test_01_initialization(self):
         """

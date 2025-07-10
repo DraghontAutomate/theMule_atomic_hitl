@@ -10,6 +10,7 @@ import uuid
 import json
 from typing import Callable, Dict, Any, Optional, Tuple
 from collections import deque
+from .config import Config # Import the new Config class
 
 class SurgicalEditorLogic:
     """
@@ -43,20 +44,20 @@ class SurgicalEditorLogic:
     """
     def __init__(self,
                  initial_data: Dict[str, Any],
-                 config: Dict[str, Any],
+                 config: Config, # Uses Config object
                  callbacks: Dict[str, Callable]):
         """
         Initializes the SurgicalEditorLogic.
 
         Args:
             initial_data (Dict[str, Any]): The initial data to be edited.
-            config (Dict[str, Any]): Configuration for the editor.
+            config (Config): The Config object for the editor.
             callbacks (Dict[str, Callable]): Callbacks for UI interaction.
         """
         self.data = initial_data
-        # Create a deep copy of the initial data for revert functionality
-        self._initial_data_snapshot = json.loads(json.dumps(initial_data))
-        self.config = config
+        self._initial_data_snapshot = json.loads(json.dumps(initial_data)) # Deep copy for revert
+        self.config_manager = config # Store the Config object
+
         self.edit_results = []  # Stores results of processed edits
         self.callbacks = callbacks
 
@@ -64,19 +65,20 @@ class SurgicalEditorLogic:
         self.edit_request_queue: deque[Tuple[str, str, str]] = deque()
         self.active_edit_task: Optional[Dict[str, Any]] = None # Details of the current task being processed
 
-        # Determine the main text field from config, with fallbacks
-        self.main_text_field = None
-        self.original_text_field = None # Field for original text in diff editor
-        if self.config.get('fields'):
-            for field_config in self.config['fields']:
-                if field_config.get('type') == 'diff-editor':
-                    self.main_text_field = field_config.get('modifiedDataField')
-                    self.original_text_field = field_config.get('originalDataField')
-                    break
-        if not self.main_text_field:
-            print("Warning: No 'diff-editor' with 'modifiedDataField' found in config. Using defaults.")
-            self.main_text_field = "editedText" # Default field name for the main text
-            self.original_text_field = "originalText" # Default field name for the original text
+
+        # Use properties from Config object to get field names
+        self.main_text_field = self.config_manager.main_editor_modified_field
+        self.original_text_field = self.config_manager.main_editor_original_field
+
+        # Ensure initial data has the necessary fields if they are missing
+        if self.main_text_field not in self.data:
+            self.data[self.main_text_field] = "" # Initialize if not present
+        if self.original_text_field not in self.data:
+            # If original_text_field is not in initial_data,
+            # initialize it with the content of main_text_field.
+            # This ensures that the diff editor has a baseline if only one text field was provided.
+            self.data[self.original_text_field] = self.data[self.main_text_field]
+
 
     @property
     def current_main_content(self) -> str:
@@ -98,18 +100,48 @@ class SurgicalEditorLogic:
         """
         self.data[self.main_text_field] = value
 
+    def get_final_data(self) -> Dict[str, Any]:
+        """Returns the current state of the data, typically after session completion."""
+        return self.data
+
     def start_session(self):
         """
         Starts the editing session.
-        Notifies the view for an initial update and attempts to process the first edit request if any.
+
+        Initializes or verifies the original text field for diffing based on the snapshot
+        of initial data. Notifies the view for an initial update and attempts to process
+        the first edit request if any are queued.
         """
+        # Ensure the original text field in data is correctly set from the snapshot
+        # if it wasn't set from initial_data directly for the diff editor.
+        # This is important if only 'editedText' (main_text_field) was provided initially.
+        if self.original_text_field not in self._initial_data_snapshot:
+             # If original_text_field wasn't in the explicit initial data,
+             # its snapshot value should be based on the initial main_text_field.
+             self._initial_data_snapshot[self.original_text_field] = self._initial_data_snapshot.get(self.main_text_field, "")
+
+        # Update self.data's original_text_field to match the snapshot if it's different
+        # or wasn't properly set up in __init__ (e.g., if original_text_field was initially absent).
+        # This ensures the UI's diff editor gets the correct original baseline from the true initial state.
+        current_original_in_data = self.data.get(self.original_text_field)
+        snapshot_original = self._initial_data_snapshot.get(self.original_text_field, "") # Fallback to empty string
+
+        if current_original_in_data != snapshot_original:
+            self.data[self.original_text_field] = snapshot_original
+            # Also ensure the snapshot reflects this if it was derived, for revert consistency.
+            if self.original_text_field not in self._initial_data_snapshot:
+                 self._initial_data_snapshot[self.original_text_field] = snapshot_original
+
+
+
         self._notify_view_update()
         self._process_next_edit_request()
 
     def _notify_view_update(self):
         """
         Notifies the UI to update its view by calling the 'update_view' callback.
-        Passes current data, config, and information about the edit queue.
+        Passes current data, config (as dict), and information about the edit queue.
+
         """
         queue_info = {
             "size": len(self.edit_request_queue),
@@ -118,7 +150,8 @@ class SurgicalEditorLogic:
         if self.active_edit_task:
             queue_info['active_task_status'] = self.active_edit_task.get('status')
             queue_info['active_task_hint'] = self.active_edit_task.get('user_hint')
-        self.callbacks['update_view'](self.data, self.config, queue_info)
+        # Pass the raw dict from the config manager to the view
+        self.callbacks['update_view'](self.data, self.config_manager.get_config(), queue_info)
 
     def add_edit_request(self, hint: str, instruction: str):
         """
@@ -321,7 +354,9 @@ class SurgicalEditorLogic:
             # or by assuming indices are still valid if the content hasn't drifted too much.
             # For simplicity, we'll assume indices from `original_content_snapshot` are applied to it,
             # and this result becomes the new `self.current_main_content`.
-            self.current_main_content = new_content_for_this_task
+
+            self.current_main_content = new_content_for_this_task # My version's logic
+
 
             self.edit_results.append({
                 "id": str(uuid.uuid4()), "status": "task_approved",
@@ -406,7 +441,7 @@ class SurgicalEditorLogic:
             })
         self._notify_view_update() # Ensure UI reflects changes from the action
 
-    def handle_approve_main_content(self, payload: Dict[str, Any]):
+    def handle_approve_main_content(self, payload: Dict[str, Any])
         """
         Handler for 'approve_main_content' action.
         Updates the main text field and potentially other fields from the payload.
@@ -416,46 +451,36 @@ class SurgicalEditorLogic:
                                       `self.main_text_field` and its new content.
                                       It can also contain other fields to update in `self.data`.
         """
+
         print("CORE_LOGIC: Handling general approve_main_content action.")
+        # Update the main text field if present in the payload
         if self.main_text_field in payload:
             self.current_main_content = payload[self.main_text_field]
+
         # Update other data fields if they are present in the payload and exist in self.data
+
         for key, value in payload.items():
             if key != self.main_text_field and key in self.data: # Check if key exists in self.data
                 self.data[key] = value
-        self.data["status"] = "Content Approved (General)" # Update a general status field
-        # Potentially make a new snapshot if this approved content becomes a new baseline
-        # self._initial_data_snapshot = json.loads(json.dumps(self.data))
+
+        self.data["status"] = "Content Approved (General)" # Example status update
         print(f"--- General content approval. Data: {self.data} ---")
 
     def handle_increment_version(self, payload: Dict[str, Any]):
-        """
-        Handler for 'increment_version' action.
-        Increments a 'version' field in `self.data`.
-
-        Args:
-            payload (Dict[str, Any]): Not used in this handler.
-        """
-        current_version_str = self.data.get("version", "0.0") # Default to "0.0" if not exists
-        current_version = 0.0
+        """Handles the 'increment_version' action. Increments a 'version' field in data."""
+        current_version_str = str(self.data.get("version", "0.0")) # Ensure string for parsing
         try:
-            current_version = float(current_version_str)
-        except (ValueError, TypeError):
-            print(f"Warning: Could not parse version '{current_version_str}'. Resetting to 0.0 for increment.")
-            current_version = 0.0 # Default to 0.0 if parsing fails
-
-        self.data["version"] = str(round(current_version + 0.1, 1)) # Store version as string
+            current_version_float = float(current_version_str)
+            self.data["version"] = round(current_version_float + 0.1, 1)
+        except ValueError:
+            self.data["version"] = 0.1 # Fallback if current version is not a valid number
+            print(f"Warning: Could not parse version '{current_version_str}'. Resetting to 0.1.")
         self.data["status"] = "Version updated."
 
     def handle_revert_changes(self, payload: Dict[str, Any]):
-        """
-        Handler for 'revert_changes' action.
-        Reverts `self.data` to the `_initial_data_snapshot` taken at initialization
-        or after a full approval.
+        """Handles the 'revert_changes' action. Reverts data to its initial snapshot."""
+        # Perform a deep copy from the snapshot to ensure no shared references
 
-        Args:
-            payload (Dict[str, Any]): Not used in this handler.
-        """
         self.data = json.loads(json.dumps(self._initial_data_snapshot))
         self.data["status"] = "Changes Reverted."
         # Any active LLM task should probably be cancelled or handled here.
@@ -474,6 +499,7 @@ class SurgicalEditorLogic:
             self.edit_request_queue.clear()
 
 
+
     def handle_unknown_action(self, payload: Dict[str, Any]):
         """
         Handler for actions that don't have a specific `handle_...` method.
@@ -481,29 +507,33 @@ class SurgicalEditorLogic:
         Args:
             payload (Dict[str, Any]): Payload of the unknown action.
         """
+
         action_name = payload.get("action_name", "unknown") # Assuming action_name might be in payload
         print(f"Warning: Unknown generic action '{action_name}' received by SurgicalEditorLogic.")
         self.callbacks['show_error'](f"Unknown generic action '{action_name}' requested.")
 
     # --- Mock LLM Methods ---
     # These methods simulate interactions with an LLM for locating and editing text.
-    # In a real application, these would involve API calls to an actual LLM service.
+
+    # In a real application, these would involve calls to actual LLM services.
 
     def _mock_llm_locator(self, text_to_search: str, hint: str) -> Optional[Dict[str, Any]]:
         """
-        Mock LLM call to locate a snippet of text.
-        This placeholder uses regex to find the first occurrence of the hint.
+        Mocks an LLM call to locate a snippet of text based on a hint.
+        Uses simple regex search for demonstration.
 
         Args:
-            text_to_search (str): The text in which to find the snippet.
-            hint (str): The hint provided by the user to locate the snippet.
+            text_to_search (str): The text in which to search for the snippet.
+            hint (str): The hint to guide the search.
+
 
         Returns:
             Optional[Dict[str, Any]]: A dictionary with 'start_idx', 'end_idx', and 'snippet'
                                       if found, otherwise None.
         """
-        # This is a placeholder for a real LLM call or a more sophisticated local search.
-        # It tries to find the *first* occurrence of the hint in the text, case-insensitively.
+        # Using re.escape on the hint to treat it as a literal string in the regex
+        # IGNORECASE for case-insensitive matching
+
         match = re.search(re.escape(hint), text_to_search, re.IGNORECASE)
         if match:
             start_idx, end_idx = match.span()
@@ -512,16 +542,17 @@ class SurgicalEditorLogic:
 
     def _mock_llm_editor(self, snippet_to_edit: str, instruction: str) -> str:
         """
-        Mock LLM call to edit a snippet of text based on an instruction.
-        This placeholder performs a simplistic modification.
+        Mocks an LLM call to edit a snippet of text based on an instruction.
+        Performs a simple transformation for demonstration.
 
         Args:
-            snippet_to_edit (str): The original snippet of text.
-            instruction (str): The user's instruction on how to edit it.
+            snippet_to_edit (str): The text snippet to be edited.
+            instruction (str): The instruction on how to edit the snippet.
 
         Returns:
-            str: The "edited" snippet.
+            str: The edited snippet.
         """
         # This is a placeholder for a real LLM call that would perform an edit.
         # It simply prepends a fixed string and uppercases the snippet.
+
         return f"EDITED based on '{instruction}': [{snippet_to_edit.upper()}]"
