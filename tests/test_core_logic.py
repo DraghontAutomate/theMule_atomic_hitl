@@ -3,6 +3,7 @@ import sys
 import os
 import unittest # Using unittest for a more structured approach
 from unittest.mock import MagicMock
+import json # Added for temp config file
 
 # Adjust path to import from src
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,15 +13,23 @@ sys.path.insert(0, project_root) # Add project root for general imports
 # This is a workaround for the current package structure where __init__ imports runner.
 try:
     from src.themule_atomic_hitl.core import SurgicalEditorLogic
+    from src.themule_atomic_hitl.config import Config # Import Config class
 except ModuleNotFoundError as e:
-    if 'PyQt5' in str(e):
-        print("PyQt5 not found, attempting direct import of core.py for testing...")
-        core_path = os.path.join(project_root, "src", "themule_atomic_hitl")
-        if core_path not in sys.path:
-             sys.path.insert(0, core_path)
-        import core # Now core should be SurgicalEditorLogic from core.py
-        SurgicalEditorLogic = core.SurgicalEditorLogic
+    if 'PyQt5' in str(e): # Check if PyQt5 is the cause of ModuleNotFoundError
+        print("PyQt5 not found, or other import error. Attempting to adjust path for core logic testing...")
+        # This path adjustment assumes tests are run from the project root or similar context
+        # where 'src' is a direct subdirectory.
+        core_module_path = os.path.join(project_root, "src")
+        if core_module_path not in sys.path:
+            sys.path.insert(0, core_module_path) # Add 'src' to path
+
+        # Try importing again after path adjustment
+        from themule_atomic_hitl.core import SurgicalEditorLogic
+        from themule_atomic_hitl.config import Config
+        print("Successfully imported SurgicalEditorLogic and Config after path adjustment.")
     else:
+        # If the error is not related to PyQt5, re-raise it.
+        print(f"Encountered an unexpected ImportError: {e}")
         raise e
 
 
@@ -36,31 +45,51 @@ class TestSurgicalEditorLogic(unittest.TestCase):
             'confirm_location_details': MagicMock()
         }
 
-        self.initial_data = {
-            "document_text": "This is the initial document content.",
+        self.sample_initial_data = { # Renamed for clarity
+            "document_text": "This is the initial document content.", # This will be 'modifiedDataField'
+            "original_doc": "This is the initial document content.", # This will be 'originalDataField'
             "version": 1.0,
             "author": "TestUser"
         }
 
-        self.config = {
+        # This dictionary will be used to create a Config object
+        self.sample_config_dict = {
             "fields": [
-                {"name": "document_text", "type": "diff-editor", "originalDataField": "original_doc", "modifiedDataField": "document_text"},
+                # Ensure this matches what SurgicalEditorLogic expects via Config properties
+                {"name": "diff_editor_main", "type": "diff-editor",
+                 "originalDataField": "original_doc", "modifiedDataField": "document_text"},
                 {"name": "author", "type": "text-input", "label": "Author"},
                 {"name": "version", "type": "label", "label": "Version"}
             ],
             "actions": [
                 {"name": "increment_version", "label": "Increment Version"},
                 {"name": "revert_changes", "label": "Revert All Changes"}
-            ]
+            ],
+            "settings": { # Add settings for completeness if Config expects it
+                "defaultWindowTitle": "Test Window"
+            }
         }
 
+        # Create a temporary custom config file to initialize Config object properly
+        self.temp_config_file_path = "temp_test_core_config.json"
+        with open(self.temp_config_file_path, 'w') as f:
+            json.dump(self.sample_config_dict, f)
+
+        # Initialize Config object using the temporary file
+        self.config_object = Config(custom_config_path=self.temp_config_file_path)
+
         self.editor_logic = SurgicalEditorLogic(
-            initial_data=dict(self.initial_data), # Pass a copy
-            config=dict(self.config),             # Pass a copy
+            initial_data=dict(self.sample_initial_data), # Pass a copy
+            config=self.config_object,                   # Pass the Config object
             callbacks=self.mock_callbacks
         )
         for mock_func in self.mock_callbacks.values():
             mock_func.reset_mock()
+
+    def tearDown(self):
+        """Clean up after each test."""
+        if os.path.exists(self.temp_config_file_path):
+            os.remove(self.temp_config_file_path)
 
     def test_01_initialization(self):
         print("\nRunning test_01_initialization...")
