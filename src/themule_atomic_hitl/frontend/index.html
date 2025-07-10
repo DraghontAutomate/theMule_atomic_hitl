@@ -3,47 +3,86 @@
 <head>
   <meta charset="utf-8">
   <title>Fully Configurable Tool</title>
+  <!--
+    Basic HTML structure for the TheMule Atomic HITL tool.
+    This file defines the layout and static elements of the user interface.
+    Dynamic content and interactions are handled by frontend.js and data from the Python backend.
+  -->
+
+  <!-- Basic styling for layout and components -->
   <style>
+    /* Reset default margins and paddings, set up flex column layout for the whole page */
     body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; display: flex; flex-direction: column; }
-    #header-container { padding: 10px 15px; border-bottom: 1px solid #ccc; background: #fff; display: flex; justify-content: space-between; align-items: center; }
-    #app-container { display: flex; flex-grow: 1; min-height: 0; }
+
+    /* Header: Will be populated by frontend.js based on config.json (if header fields are defined) */
+    /* This is a placeholder ID, actual header elements are dynamically created. */
+    /* #header-container { padding: 10px 15px; border-bottom: 1px solid #ccc; background: #fff; display: flex; justify-content: space-between; align-items: center; } */
+
+    /* Main application container: holds sidebar and main body */
+    #app-container { display: flex; flex-grow: 1; min-height: 0; /* Important for flex children to scroll correctly */ }
+
+    /* Sidebar: For displaying data fields and action buttons defined in config.json */
     #sidebar-container { width: 280px; padding: 15px; border-right: 1px solid #ccc; background: #f7f7f7; box-sizing: border-box; overflow-y: auto; }
-    #mainbody-container { flex-grow: 1; position: relative; }
+
+    /* Main body: Where the Monaco diff editor and HITL-specific UI sections will reside */
+    #mainbody-container { flex-grow: 1; position: relative; /* For potential absolute positioning of children like editor overlays */ }
+
+    /* Footer: Will be populated by frontend.js based on config.json (if footer fields are defined) */
     #footer-container { padding: 10px; border-top: 1px solid #ccc; background: #f0f0f0; text-align: center; }
+
+    /* Styling for dynamically generated field groups (labels, inputs, textareas) */
     .field-group { margin-bottom: 15px; }
     .field-group label { display: block; font-size: 0.8em; color: #666; margin-bottom: 3px; }
     .field-group span, .field-group input, .field-group textarea { font-size: 1em; }
     .field-group input, .field-group textarea { width: 100%; box-sizing: border-box; padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
-    .field-group textarea { min-height: 100px; resize: vertical; }
-    .label-bold { font-size: 1.4em; font-weight: bold; }
+    .field-group textarea { min-height: 100px; resize: vertical; } /* Allow vertical resize for textareas */
+    .label-bold { font-size: 1.4em; font-weight: bold; } /* For prominent labels */
+
+    /* Styling for action buttons (dynamically generated or static) */
     button.action-button { padding: 8px 12px; margin-left: 10px; border: 1px solid #888; background-color: #eee; cursor: pointer; }
-    button.action-button.primary { background-color: #28a745; color: white; border-color: #28a745; font-weight: bold; }
-    #sidebar-container button.action-button { width: 100%; margin: 10px 0 0 0; }
+    button.action-button.primary { background-color: #28a745; color: white; border-color: #28a745; font-weight: bold; } /* Primary action button style */
+    #sidebar-container button.action-button { width: 100%; margin: 10px 0 0 0; } /* Sidebar buttons take full width */
   </style>
+
+  <!-- Qt WebChannel script: Essential for communication between JavaScript and the Python backend (PyQt5) -->
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+
+  <!-- Monaco Editor Loader script: Used to load the Monaco editor (powerful code editor from VS Code) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+
+  <!-- Additional styles specifically for the HITL (Human-in-the-Loop) UI elements -->
   <style>
-    /* Additional styles for new elements */
-    .hidden { display: none !important; }
+    .hidden { display: none !important; } /* Utility class to hide elements */
+
+    /* Container for global application controls (e.g., end session, request new edit) */
     #app-controls-container { padding: 10px; background: #e9e9e9; border-bottom: 1px solid #ccc; display: flex; gap: 10px; align-items: center;}
-    #queue-status-display { margin-left: auto; font-style: italic; }
+    #queue-status-display { margin-left: auto; font-style: italic; } /* Displays edit queue status */
+
+    /* General styling for distinct UI sections */
     .ui-section { padding: 15px; border: 1px solid #ddd; margin-bottom: 15px; background: #fff; }
     .ui-section h3 { margin-top: 0; }
+
+    /* Styling for areas related to location confirmation and edit decision */
     #location-confirmation-area, #inner-loop-decision-area {
-        border-top: 2px dashed #ccc;
+        border-top: 2px dashed #ccc; /* Visual separator */
         margin-top: 15px;
         padding-top: 15px;
     }
+    /* Preview area for the snippet located by the LLM */
     #located-snippet-preview { background-color: #f0f0f0; border: 1px solid #ccc; padding: 10px; margin-bottom:10px; white-space: pre-wrap; font-family: monospace;}
   </style>
 </head>
 <body>
+  <!-- App Controls: Buttons for overall session management and initiating new edits. -->
   <div id="app-controls-container">
     <button id="btn-approve-end-session">Approve & End Session</button>
     <button id="btn-request-new-edit">Request New Edit</button>
+    <!-- Queue Status: Dynamically updated by frontend.js to show queue size and processing status. -->
     <div id="queue-status-display">Queue: 0 | Idle</div>
   </div>
 
+  <!-- Edit Request Input Area: Hidden by default, shown when user clicks 'Request New Edit'. -->
+  <!-- Contains fields for the user to provide a hint and an instruction for an edit. -->
   <div id="edit-request-input-area" class="ui-section hidden">
     <h3>New Edit Request</h3>
     <div class="field-group">
@@ -57,42 +96,54 @@
     <button id="btn-add-to-queue">Add to Edit Queue</button>
   </div>
 
+  <!-- Main Application Layout: Contains the sidebar and the main body content area. -->
   <div id="app-container">
+    <!-- Sidebar Container: Populated by frontend.js based on config.json. -->
+    <!-- Typically displays data fields (labels, inputs, textareas) and action buttons. -->
     <div id="sidebar-container">
-      <!-- Existing sidebar elements from config.json will go here via frontend.js -->
-      <!-- New HITL specific controls can also be added here if desired -->
+      <!-- Elements from config.json (fields of type 'label', 'text-input', 'textarea', 'button') will be dynamically added here. -->
     </div>
-    <div id="mainbody-container">
-      <!-- Monaco Diff Editor will be placed here by frontend.js -->
-      <!-- This will display current_content vs provisional_edit during inner loop -->
 
+    <!-- Main Body Container: This is where the primary interaction takes place. -->
+    <!-- The Monaco Diff Editor will be instantiated here by frontend.js to show changes. -->
+    <div id="mainbody-container">
+      <!-- The Monaco Diff Editor instance will be created and attached here by frontend.js. -->
+      <!-- It will display the original content (or snippet) vs. the LLM's proposed edit. -->
+
+      <!-- Location Confirmation Area: Hidden by default. Shown when backend locates a snippet. -->
+      <!-- Allows user to confirm or revise the located snippet. -->
       <div id="location-confirmation-area" class="ui-section hidden">
         <h3>Confirm Snippet Location</h3>
-        <p>Original Hint: <strong id="original-hint-display"></strong></p>
+        <p>Original Hint: <strong id="original-hint-display"></strong></p> <!-- Displays the user's original hint -->
         <p>LLM Located Snippet (from original content):</p>
-        <div id="located-snippet-preview"></div>
+        <div id="located-snippet-preview"></div> <!-- Shows the text snippet found by the backend -->
         <div class="field-group">
             <label for="input-revised-hint">Revise Hint (optional, if LLM missed the spot):</label>
-            <input type="text" id="input-revised-hint">
+            <input type="text" id="input-revised-hint"> <!-- Allows user to provide a corrected hint -->
         </div>
         <button id="btn-confirm-location">Confirm Location & Proceed with Edit</button>
         <button id="btn-cancel-location-stage">Cancel This Edit Task</button>
       </div>
 
+      <!-- Inner Loop Decision Area: Hidden by default. Shown after diff preview is ready. -->
+      <!-- Allows user to approve, refine (not fully implemented in this example), or discard the proposed edit. -->
       <div id="inner-loop-decision-area" class="ui-section hidden">
         <h3>Review Provisional Edit</h3>
         <p>The diff editor above shows the original snippet vs. the LLM's proposed change.</p>
         <button id="btn-approve-this-edit" class="action-button primary">Approve This Edit</button>
+        <!-- "Refine This Edit" might involve allowing direct edits in the diff editor's modified pane -->
         <button id="btn-refine-this-edit" class="action-button">Refine This Edit</button>
-        <button id="btn-discard-this-edit" class="action-button">Discard This Edit Task</button>
+        <button id="btn-discard-this-edit" class="action-button">Discard This Edit Task</button> <!-- This is equivalent to 'reject' in the core logic -->
       </div>
     </div>
   </div>
 
+  <!-- Footer Container: Populated by frontend.js based on config.json (if footer fields are defined). -->
   <div id="footer-container">
-     <!-- Existing footer elements from config.json will go here via frontend.js -->
+     <!-- Elements from config.json (fields of type 'label', 'button' etc. for footer) will be dynamically added here. -->
   </div>
 
+  <!-- Main JavaScript file for frontend logic -->
   <script src="frontend.js"></script>
 </body>
 </html>
