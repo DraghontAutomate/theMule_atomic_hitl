@@ -1,10 +1,19 @@
 # src/themule_atomic_hitl/runner.py
+"""
+This module is responsible for running the PyQt5 application,
+which hosts the web-based UI for the Surgical Editor.
+It sets up the main window, the web engine view, and the communication
+channel (QWebChannel) between the Python backend (SurgicalEditorLogic)
+and the JavaScript frontend.
+"""
+
 import sys
 import os
 import json # Still needed for final data dump
 from typing import Dict, Any, Optional, Union # Optional added, Union added
 from PyQt5.QtCore import QObject, pyqtSlot, QUrl, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QMainWindow
+
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWebChannel import QWebChannel
 
@@ -14,6 +23,7 @@ from .config import Config # Import the new Config class
 from .config import Config # Import the new Config class
 
 # Using main's _load_json_file for now as it's more robust with error handling
+
 def _load_json_file(path: str) -> Dict[str, Any]:
     """
     Helper function to load data from a JSON file.
@@ -39,6 +49,7 @@ class Backend(QObject):
 
     Signals:
         updateViewSignal: Emitted to tell the JS UI to refresh its display with new data.
+
                           Passes data dict, config dict, and queue_info dict.
         showDiffPreviewSignal: Emitted to show a diff preview to the user.
                                Passes original snippet, edited snippet, and context strings.
@@ -54,6 +65,7 @@ class Backend(QObject):
     updateViewSignal = pyqtSignal(dict, dict, dict, name="updateView")
 
     # Signal to show a diff preview in JavaScript
+
     showDiffPreviewSignal = pyqtSignal(str, str, str, str, name="showDiffPreview")
 
     # Signal to request clarification from the user for an active LLM task
@@ -63,6 +75,7 @@ class Backend(QObject):
     showErrorSignal = pyqtSignal(str, name="showError")
 
     # Signal to prompt the user to confirm the location of a snippet found by the locator
+
     promptUserToConfirmLocationSignal = pyqtSignal(dict, str, str, name="promptUserToConfirmLocation")
 
     # Signal to indicate session termination, so the calling function can retrieve data
@@ -80,6 +93,7 @@ class Backend(QObject):
         super().__init__(parent)
         self.config_manager = config_manager # Store the Config object
 
+
         # Define callbacks that SurgicalEditorLogic will use to communicate back to this Backend
         logic_callbacks = {
             'update_view': self.on_update_view,
@@ -88,6 +102,7 @@ class Backend(QObject):
             'show_error': self.on_show_error,
             'confirm_location_details': self.on_confirm_location_details,
         }
+
         # Instantiate the core logic engine, passing the Config object
         self.logic = SurgicalEditorLogic(initial_data, self.config_manager, logic_callbacks)
 
@@ -102,6 +117,7 @@ class Backend(QObject):
             queue_info: Information about the task queue.
         """
         self.updateViewSignal.emit(data, config_dict, queue_info)
+
 
     def on_show_diff_preview(self, original_snippet: str, edited_snippet: str, before_context: str, after_context: str):
         """
@@ -139,6 +155,7 @@ class Backend(QObject):
         """
         # Pass the raw dict from config manager
         return {"config": self.logic.config_manager.get_config(), "data": self.logic.data}
+
 
     @pyqtSlot()
     def startSession(self):
@@ -202,18 +219,23 @@ class Backend(QObject):
         Retrieves final data, prints it and audit trail to console, and emits sessionTerminatedSignal.
         """
         final_data = self.logic.get_final_data()
+
         print("\n--- SESSION TERMINATED BY USER ---")
         main_text_field = self.logic.main_text_field # from core logic via config
         if main_text_field and main_text_field in final_data:
              print(f"Final Content ({main_text_field}):\n{final_data[main_text_field]}")
         else:
+
             print("Final main text field not found or not configured in final_data.")
+            
         print("\nFull Final Data:\n" + json.dumps(final_data, indent=2))
         print("\nAudit Trail (Edit Results):")
         print(json.dumps(self.logic.edit_results, indent=2))
 
         self.sessionTerminatedSignal.emit() # Emit signal for library use
         # Do not call QApplication.quit() here to allow external management
+
+
 
 class MainWindow(QMainWindow):
     """
@@ -225,11 +247,13 @@ class MainWindow(QMainWindow):
                  config_manager: Config, # Uses Config object
                  app_instance: QApplication, # Expects the QApplication instance
                  parent: Optional[QObject] = None):
+
         """
         Initializes the MainWindow.
 
         Args:
             initial_data (Dict[str, Any]): The initial data for the editor.
+
             config_manager (Config): The Config object for UI and behavior settings.
             app_instance (QApplication): The current QApplication instance.
             parent (Optional[QObject]): The parent QObject, if any.
@@ -247,16 +271,21 @@ class MainWindow(QMainWindow):
         self.backend = Backend(initial_data, self.config_manager, self) # Pass self as parent
         self.backend.sessionTerminatedSignal.connect(self.on_session_terminated) # Connect the signal
 
+
         # Register the backend object with the channel, making it accessible to JS
         self.channel.registerObject("backend", self.backend)
         # Set the web channel on the web page
         self.view.page().setWebChannel(self.channel)
 
         # Construct the path to the index.html file for the frontend
+
+        # Assumes index.html is in a 'frontend' subdirectory relative to this script
+
         base_dir = os.path.dirname(os.path.abspath(__file__)) # Directory of runner.py
         html_path = os.path.join(base_dir, "frontend", "index.html")
 
         if not os.path.exists(html_path):
+
             # Attempt fallback similar to 'main' branch logic if primary path fails
             alt_html_path = os.path.join(base_dir, "..", "frontend", "index.html") # Assuming frontend might be one level up from package
             if os.path.exists(alt_html_path):
@@ -272,9 +301,11 @@ class MainWindow(QMainWindow):
                     print(f"ERROR: index.html not found at primary path {html_path} or common fallbacks.")
                     # Consider loading a placeholder or raising error if critical
 
+
         # Load the HTML file into the web view
         self.view.setUrl(QUrl.fromLocalFile(html_path))
         self.setCentralWidget(self.view) # Make the web view the main content of the window
+
 
     def on_session_terminated(self):
         """Closes the window when the backend signals termination."""
@@ -394,3 +425,4 @@ if __name__ == '__main__':
         print("Illustrative run: Event loop would need to be managed by caller.")
     else:
         print("run_application (standalone mode) did not return data as expected or failed.")
+

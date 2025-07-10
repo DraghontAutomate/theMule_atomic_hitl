@@ -1,5 +1,6 @@
 # examples/run_tool.py
 """
+
 This script serves as an example of how to use the TheMule Atomic HITL tool
 as a library, primarily through the `hitl_node_run` function.
 
@@ -19,6 +20,7 @@ To run this example:
 - Navigate to the root of the repository.
 - Execute: `python examples/run_tool.py`
 """
+
 import sys
 import os
 import json # For loading data and printing results
@@ -43,12 +45,12 @@ except ImportError:
         print(f"Successfully imported components from source directory: {project_root}")
     except ImportError as e:
         print(f"Failed to import components from source directory: {project_root}")
-        print(f"ImportError: {e}")
         print("Please ensure that the script is run from the project root or that the package is installed.")
         sys.exit(1)
 
 
 if __name__ == "__main__":
+
     current_dir = os.path.dirname(os.path.abspath(__file__)) # Directory of this script
 
     print("Starting HITL example demonstrations...")

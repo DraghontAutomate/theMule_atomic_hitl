@@ -1,4 +1,10 @@
 # src/themule_atomic_hitl/core.py
+"""
+This module defines the core logic for the Surgical Editor.
+It handles the state management, edit queuing, and interaction with a UI (via callbacks)
+for a human-in-the-loop editing process.
+"""
+
 import re
 import uuid
 import json
@@ -21,7 +27,7 @@ class SurgicalEditorLogic:
     Attributes:
         data (Dict[str, Any]): The current state of the data being edited.
         _initial_data_snapshot (Dict[str, Any]): A deep copy of the initial data, used for revert functionality.
-        config_manager (Config): The Config object holding configuration settings.
+        config (Dict[str, Any]): Configuration settings for the editor, potentially including field definitions.
         edit_results (list): A log of completed edit tasks and their outcomes.
         callbacks (Dict[str, Callable]): A dictionary of callback functions to interact with the UI.
             Expected callbacks:
@@ -51,12 +57,14 @@ class SurgicalEditorLogic:
         self.data = initial_data
         self._initial_data_snapshot = json.loads(json.dumps(initial_data)) # Deep copy for revert
         self.config_manager = config # Store the Config object
+
         self.edit_results = []  # Stores results of processed edits
         self.callbacks = callbacks
 
         # Queue for edit requests: (hint, instruction, original_content_snapshot)
         self.edit_request_queue: deque[Tuple[str, str, str]] = deque()
         self.active_edit_task: Optional[Dict[str, Any]] = None # Details of the current task being processed
+
 
         # Use properties from Config object to get field names
         self.main_text_field = self.config_manager.main_editor_modified_field
@@ -99,6 +107,7 @@ class SurgicalEditorLogic:
     def start_session(self):
         """
         Starts the editing session.
+
         Initializes or verifies the original text field for diffing based on the snapshot
         of initial data. Notifies the view for an initial update and attempts to process
         the first edit request if any are queued.
@@ -124,6 +133,7 @@ class SurgicalEditorLogic:
                  self._initial_data_snapshot[self.original_text_field] = snapshot_original
 
 
+
         self._notify_view_update()
         self._process_next_edit_request()
 
@@ -131,6 +141,7 @@ class SurgicalEditorLogic:
         """
         Notifies the UI to update its view by calling the 'update_view' callback.
         Passes current data, config (as dict), and information about the edit queue.
+
         """
         queue_info = {
             "size": len(self.edit_request_queue),
@@ -343,7 +354,9 @@ class SurgicalEditorLogic:
             # or by assuming indices are still valid if the content hasn't drifted too much.
             # For simplicity, we'll assume indices from `original_content_snapshot` are applied to it,
             # and this result becomes the new `self.current_main_content`.
+
             self.current_main_content = new_content_for_this_task # My version's logic
+
 
             self.edit_results.append({
                 "id": str(uuid.uuid4()), "status": "task_approved",
@@ -428,17 +441,28 @@ class SurgicalEditorLogic:
             })
         self._notify_view_update() # Ensure UI reflects changes from the action
 
-    def handle_approve_main_content(self, payload: Dict[str, Any]):
-        """Handles the 'approve_main_content' action. Updates main text and other fields from payload."""
+    def handle_approve_main_content(self, payload: Dict[str, Any])
+        """
+        Handler for 'approve_main_content' action.
+        Updates the main text field and potentially other fields from the payload.
+
+        Args:
+            payload (Dict[str, Any]): Payload should contain the field designated as
+                                      `self.main_text_field` and its new content.
+                                      It can also contain other fields to update in `self.data`.
+        """
+
         print("CORE_LOGIC: Handling general approve_main_content action.")
         # Update the main text field if present in the payload
         if self.main_text_field in payload:
             self.current_main_content = payload[self.main_text_field]
 
-        # Update other data fields present in the payload and also in self.data
+        # Update other data fields if they are present in the payload and exist in self.data
+
         for key, value in payload.items():
-            if key != self.main_text_field and key in self.data:
+            if key != self.main_text_field and key in self.data: # Check if key exists in self.data
                 self.data[key] = value
+
         self.data["status"] = "Content Approved (General)" # Example status update
         print(f"--- General content approval. Data: {self.data} ---")
 
@@ -456,17 +480,41 @@ class SurgicalEditorLogic:
     def handle_revert_changes(self, payload: Dict[str, Any]):
         """Handles the 'revert_changes' action. Reverts data to its initial snapshot."""
         # Perform a deep copy from the snapshot to ensure no shared references
+
         self.data = json.loads(json.dumps(self._initial_data_snapshot))
         self.data["status"] = "Changes Reverted."
+        # Any active LLM task should probably be cancelled or handled here.
+        if self.active_edit_task:
+            print("CORE_LOGIC: Reverting changes with an active task. Task will be cancelled.")
+            self.edit_results.append({
+                "id": str(uuid.uuid4()), "status": "task_cancelled_on_revert",
+                "message": f"Task for hint '{self.active_edit_task['user_hint']}' cancelled due to revert."
+            })
+            self.active_edit_task = None
+            # No need to call _process_next_edit_request here as revert is a major state change.
+            # The UI should reflect the reverted state.
+        # Clear the queue as well, as its snapshots may no longer be relevant.
+        if self.edit_request_queue:
+            print("CORE_LOGIC: Clearing edit request queue due to revert.")
+            self.edit_request_queue.clear()
+
+
 
     def handle_unknown_action(self, payload: Dict[str, Any]):
-        """Handles any action for which a specific handler method is not defined."""
+        """
+        Handler for actions that don't have a specific `handle_...` method.
+
+        Args:
+            payload (Dict[str, Any]): Payload of the unknown action.
+        """
+
         action_name = payload.get("action_name", "unknown") # Assuming action_name might be in payload
         print(f"Warning: Unknown generic action '{action_name}' received by SurgicalEditorLogic.")
         self.callbacks['show_error'](f"Unknown generic action '{action_name}' requested.")
 
     # --- Mock LLM Methods ---
     # These methods simulate interactions with an LLM for locating and editing text.
+
     # In a real application, these would involve calls to actual LLM services.
 
     def _mock_llm_locator(self, text_to_search: str, hint: str) -> Optional[Dict[str, Any]]:
@@ -478,17 +526,19 @@ class SurgicalEditorLogic:
             text_to_search (str): The text in which to search for the snippet.
             hint (str): The hint to guide the search.
 
+
         Returns:
             Optional[Dict[str, Any]]: A dictionary with 'start_idx', 'end_idx', and 'snippet'
                                       if found, otherwise None.
         """
         # Using re.escape on the hint to treat it as a literal string in the regex
         # IGNORECASE for case-insensitive matching
+
         match = re.search(re.escape(hint), text_to_search, re.IGNORECASE)
         if match:
             start_idx, end_idx = match.span()
             return {"start_idx": start_idx, "end_idx": end_idx, "snippet": match.group(0)}
-        return None
+        return None # Return None if no match is found
 
     def _mock_llm_editor(self, snippet_to_edit: str, instruction: str) -> str:
         """
@@ -502,5 +552,7 @@ class SurgicalEditorLogic:
         Returns:
             str: The edited snippet.
         """
-        # Example edit: Convert to uppercase and prepend instruction
+        # This is a placeholder for a real LLM call that would perform an edit.
+        # It simply prepends a fixed string and uppercases the snippet.
+
         return f"EDITED based on '{instruction}': [{snippet_to_edit.upper()}]"
