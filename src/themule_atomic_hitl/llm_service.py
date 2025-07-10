@@ -1,4 +1,5 @@
 import os
+from typing import Optional, Dict, Any, List, Union, Callable # Added typing imports
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI # Corrected import for newer Langchain versions
