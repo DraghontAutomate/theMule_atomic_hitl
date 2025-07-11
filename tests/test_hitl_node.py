@@ -82,7 +82,21 @@ class TestHitlNodeRun(unittest.TestCase):
             os.remove(self.custom_config_path)
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
-    def test_run_with_string_content_default_config(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp): # Added mock args
+    def test_run_with_string_content_default_config(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp):
+        """
+        Tests hitl_node_run with simple string input and the default configuration.
+        - What it tests: Correct preparation of initial_data for run_application
+          when input is a string, and that the default Config object is used.
+          It also verifies that no existing Qt app is passed.
+        - Expected outcome: run_application is called with correctly structured
+          initial_data (both original and modified fields set to the input string,
+          based on default config field names) and a default Config instance.
+          The result from run_application is returned. qt_app parameter should be None.
+        - Reason for failure: Incorrect data transformation for string input,
+          default config not being loaded or passed properly, issues in how
+          run_application is called or its return value handled, or qt_app being
+          unexpectedly passed.
+        """
         mock_run_application.return_value = self.mock_final_data
         test_string = "This is a test string."
 
@@ -105,7 +119,18 @@ class TestHitlNodeRun(unittest.TestCase):
         self.assertIsNone(kwargs['qt_app']) # No existing_qt_app passed
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
-    def test_run_with_dict_content_default_config(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp): # Added mock args
+    def test_run_with_dict_content_default_config(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp):
+        """
+        Tests hitl_node_run with dictionary input and the default configuration.
+        - What it tests: Ensures that when `content_to_review` is a dictionary containing
+          the necessary fields (as per default config), it's passed directly as
+          `initial_data_param` to `run_application`. Default config should be used.
+        - Expected outcome: `run_application` is called with the input dictionary as
+          `initial_data_param` and a default Config instance.
+        - Reason for failure: The input dictionary might be unexpectedly altered,
+          the default config might not be loaded/passed correctly, or `run_application`
+          call is incorrect.
+        """
         mock_run_application.return_value = self.mock_final_data
         input_dict = {
             self.default_modified_field: "modified from dict",
@@ -122,7 +147,19 @@ class TestHitlNodeRun(unittest.TestCase):
         self.assertEqual(kwargs['config_param'].get_config(), DEFAULT_CONFIG)
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
-    def test_run_with_string_content_custom_config(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp): # Added mock args
+    def test_run_with_string_content_custom_config(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp):
+        """
+        Tests hitl_node_run with string input and a custom configuration file.
+        - What it tests: Correct preparation of `initial_data` when input is a string,
+          but using field names defined in a custom config. Ensures the custom
+          Config object is created and passed to `run_application`.
+        - Expected outcome: `run_application` is called with `initial_data` structured
+          according to the custom config's main editor fields, and a Config instance
+          loaded from the custom config path.
+        - Reason for failure: Issues loading the custom config, incorrect `initial_data`
+          keys based on custom config, or `run_application` not receiving the
+          customized Config object.
+        """
         custom_mock_final_data = {"status": "approved", "modText": "final custom content"}
         mock_run_application.return_value = custom_mock_final_data
         test_string = "Test with custom config."
@@ -142,7 +179,18 @@ class TestHitlNodeRun(unittest.TestCase):
         self.assertEqual(kwargs['config_param'].get_config()['settings']['defaultWindowTitle'], "Custom Test Window")
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
-    def test_run_with_dict_content_missing_fields(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp): # Added mock args
+    def test_run_with_dict_content_missing_fields(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp):
+        """
+        Tests hitl_node_run with dictionary input that's missing main editor fields.
+        - What it tests: Ensures that if `content_to_review` is a dictionary but lacks
+          the main editor fields (original and modified text, as per default config),
+          these fields are added to `initial_data` with empty strings.
+        - Expected outcome: `run_application` is called with `initial_data` that includes
+          the original dictionary's items plus the main editor fields initialized to "".
+        - Reason for failure: The function might not correctly identify missing fields or
+          fail to initialize them with empty strings, potentially leading to errors
+          downstream or incorrect data being passed to `run_application`.
+        """
         mock_run_application.return_value = self.mock_final_data
         # Dict is missing originalText and editedText
         input_dict = {"metadata": "only this"}
@@ -158,7 +206,16 @@ class TestHitlNodeRun(unittest.TestCase):
         }
         self.assertEqual(kwargs['initial_data_param'], expected_data)
 
-    def test_invalid_content_type(self, mock_runner_qapp, mock_hitl_qapp): # Added mock args
+    def test_invalid_content_type(self, mock_runner_qapp, mock_hitl_qapp):
+        """
+        Tests hitl_node_run with an invalid type for `content_to_review`.
+        - What it tests: The function's error handling when `content_to_review` is
+          neither a string nor a dictionary.
+        - Expected outcome: The function should print an error message and return None.
+          `run_application` should not be called.
+        - Reason for failure: Type checking might be incorrect, or the error handling
+          path (printing error, returning None) is not followed.
+        """
         with patch('builtins.print') as mock_print: # Suppress error print
             result = hitl_node_run(content_to_review=12345) # Invalid type
             self.assertIsNone(result)
@@ -166,6 +223,20 @@ class TestHitlNodeRun(unittest.TestCase):
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
     def test_run_with_existing_qt_app(self, mock_run_application_in_test, mock_runner_qapp, mock_hitl_qapp_class_mock):
+        """
+        Tests hitl_node_run when an existing QApplication instance is provided.
+        - What it tests: The function's behavior when `existing_qt_app` is passed.
+          It should use this existing app instance, create a new QEventLoop,
+          connect the main window's termination signal to the loop's quit slot,
+          show the window, and start the event loop.
+        - Expected outcome: `run_application` is called with the `qt_app` parameter set
+          to the provided `existing_qt_app`. A QEventLoop is created and executed.
+          The main window's `show` method is called. The final data from the backend
+          logic is returned.
+        - Reason for failure: Failure to correctly use the existing Qt app, issues with
+          QEventLoop creation or execution, problems connecting or handling the
+          termination signal, or incorrect handling of the main window.
+        """
         mock_existing_app_instance = MagicMock(name="MockExistingAppInstance") # Replaced MockQApplicationInstance
 
         the_actual_mock_main_window = MagicMock(name="TheMockMainWindowInstance")
@@ -197,7 +268,16 @@ class TestHitlNodeRun(unittest.TestCase):
         the_actual_mock_main_window.show.assert_called_once()
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application', side_effect=Exception("Test Exception from run_app"))
-    def test_exception_in_run_application(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp): # Added mock args
+    def test_exception_in_run_application(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp):
+        """
+        Tests error handling when `run_application` itself raises an exception.
+        - What it tests: The main try-except block in `hitl_node_run` that is
+          meant to catch exceptions from `run_application`.
+        - Expected outcome: An error message should be printed (containing the
+          exception message), and the function should return None.
+        - Reason for failure: The exception might not be caught correctly, the error
+          message format could be wrong, or it might not return None as expected.
+        """
          with patch('builtins.print') as mock_print: # Suppress error print
             result = hitl_node_run(content_to_review="test")
             self.assertIsNone(result)

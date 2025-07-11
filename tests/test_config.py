@@ -56,6 +56,15 @@ class TestConfig(unittest.TestCase):
             os.remove(self.partial_custom_config_path)
 
     def test_load_default_config(self):
+        """
+        Tests loading the default configuration.
+        - What it tests: Verifies that when Config is instantiated without a custom path,
+          it loads and provides access to the DEFAULT_CONFIG.
+        - Expected outcome: The config manager's internal config matches DEFAULT_CONFIG,
+          and properties derived from settings (like window_title) are correctly set.
+        - Reason for failure: DEFAULT_CONFIG might be corrupted, the loading mechanism
+          for defaults might be broken, or property accessors might be faulty.
+        """
         config_manager = Config()
         self.assertEqual(config_manager.get_config(), DEFAULT_CONFIG)
         self.assertEqual(config_manager.window_title, DEFAULT_CONFIG["settings"]["defaultWindowTitle"])
@@ -63,6 +72,16 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config_manager.main_editor_modified_field, "editedText") # From DEFAULT_CONFIG
 
     def test_load_custom_config(self):
+        """
+        Tests loading a custom configuration file.
+        - What it tests: Verifies that a provided custom config file correctly overrides
+          default fields and actions, and merges settings.
+        - Expected outcome: Loaded fields and actions should match the custom config.
+          Settings should be a merge of custom and default, with custom taking precedence.
+          Properties like window_title and editor fields should reflect the custom config.
+        - Reason for failure: Issues with file reading, JSON parsing, the override logic for
+          fields/actions, or the settings merge logic.
+        """
         config_manager = Config(custom_config_path=self.custom_config_path)
         loaded_config = config_manager.get_config()
 
@@ -81,6 +100,18 @@ class TestConfig(unittest.TestCase):
 
 
     def test_merge_settings_deeply(self):
+        """
+        Tests the deep merging capabilities for the 'settings' section of the config.
+        - What it tests: Ensures that when a custom config provides only a subset of settings,
+          those settings override or add to the defaults, while unspecified default
+          settings are retained. Fields and actions should remain default if not in custom config.
+        - Expected outcome: The 'settings' dictionary in the loaded config should be a
+          combination of defaults and custom values, with custom values taking precedence
+          for overlapping keys. Fields and actions should match DEFAULT_CONFIG.
+        - Reason for failure: The merge logic for settings might be incorrect (e.g., shallow
+          copy instead of deep, or incorrect precedence). Fallback for fields/actions
+          might not be working when settings are custom.
+        """
         # Default settings: {"defaultWindowTitle": "HITL Review Tool"}
         # Partial custom: {"anotherSetting": "overriddenValue", "newSetting": "newValueFromPartial"}
         config_manager = Config(custom_config_path=self.partial_custom_config_path)
@@ -98,11 +129,30 @@ class TestConfig(unittest.TestCase):
 
 
     def test_non_existent_custom_config(self):
+        """
+        Tests behavior when a specified custom config path does not exist.
+        - What it tests: Ensures that if the custom_config_path points to a non-existent
+          file, the Config class gracefully falls back to loading the DEFAULT_CONFIG.
+        - Expected outcome: The config manager's internal config should be identical to
+          DEFAULT_CONFIG. No error should be raised during instantiation.
+        - Reason for failure: The file existence check or fallback mechanism might be broken,
+          leading to an error or incorrect configuration being loaded.
+        """
         config_manager = Config(custom_config_path="non_existent_file.json")
         # Should load default config without errors, possibly with a warning printed (not tested here)
         self.assertEqual(config_manager.get_config(), DEFAULT_CONFIG)
 
     def test_get_field_config(self):
+        """
+        Tests the retrieval of specific field configurations.
+        - What it tests: Verifies that `get_field_config` correctly returns the
+          configuration for a given field name from both custom and default configs.
+          Also tests retrieval of a non-existent field.
+        - Expected outcome: For existing field names, the corresponding field dictionary
+          should be returned. For a non-existent field name, None should be returned.
+        - Reason for failure: The lookup logic in `get_field_config` might be flawed,
+          or the internal representation of fields might be incorrect.
+        """
         config_manager = Config(custom_config_path=self.custom_config_path)
         field_conf = config_manager.get_field_config("custom_field")
         self.assertIsNotNone(field_conf)
@@ -116,6 +166,16 @@ class TestConfig(unittest.TestCase):
         self.assertIsNone(config_manager.get_field_config("non_existent_field"))
 
     def test_get_action_config(self):
+        """
+        Tests the retrieval of specific action configurations.
+        - What it tests: Verifies that `get_action_config` correctly returns the
+          configuration for a given action name from both custom and default configs.
+          Also tests retrieval of a non-existent action.
+        - Expected outcome: For existing action names, the corresponding action dictionary
+          should be returned. For a non-existent action name, None should be returned.
+        - Reason for failure: The lookup logic in `get_action_config` might be flawed,
+          or the internal representation of actions might be incorrect.
+        """
         config_manager = Config(custom_config_path=self.custom_config_path)
         action_conf = config_manager.get_action_config("custom_action")
         self.assertIsNotNone(action_conf)
@@ -129,6 +189,17 @@ class TestConfig(unittest.TestCase):
         self.assertIsNone(config_manager.get_action_config("non_existent_action"))
 
     def test_main_editor_fields_fallback(self):
+        """
+        Tests the fallback mechanism for main editor field names.
+        - What it tests: Ensures that if a configuration (custom or default) does not
+          define a 'diff-editor' field, the `main_editor_original_field` and
+          `main_editor_modified_field` properties default to "originalText" and
+          "editedText" respectively.
+        - Expected outcome: The properties should return the default fallback names when
+          no 'diff-editor' is configured.
+        - Reason for failure: The logic for identifying the 'diff-editor' or the
+          fallback mechanism for these properties might be broken.
+        """
         # Test fallback when no diff-editor is defined in config
         empty_config_data = {"fields": [{"name": "a", "type": "label"}], "actions": [], "settings": {}}
         empty_config_path = "empty_fields_config.json"

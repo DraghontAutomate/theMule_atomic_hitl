@@ -339,3 +339,74 @@ Imagine an AI agent tasked with drafting a technical report. The process might i
 ```
 
 This integration pattern allows for powerful "human-in-the-loop" capabilities within autonomous agent systems, ensuring critical steps are validated or refined by human intelligence.
+
+## Testing
+
+This project uses Python's built-in `unittest` framework for testing. A custom script `run_tests.py` is provided to discover tests, execute them, and generate a human-readable Markdown report.
+
+### Running Tests
+
+1.  **Navigate to the repository root.**
+2.  **Run all tests:**
+    ```bash
+    python run_tests.py
+    ```
+    Or, if you need to specify your python executable:
+    ```bash
+    python3 run_tests.py
+    ```
+    This will execute all test files matching the pattern `test_*.py` in the `tests/` directory. A report named `test_report.md` will be generated in the root directory.
+
+3.  **Run tests for a specific module:**
+    You can run tests for a single module using the `--module` argument. The module name should correspond to the test file name without the `test_` prefix and `.py` extension, or be the direct path to the test file.
+    ```bash
+    # Example: Run tests from tests/test_config.py
+    python run_tests.py --module config
+
+    # Example: Run tests from tests/test_core_logic.py
+    python run_tests.py --module core_logic
+
+    # Example: Run tests by specifying the file path
+    python run_tests.py --module tests/test_llm_service.py
+    ```
+    The report will indicate that it's for a specific module.
+
+4.  **Specify output report file:**
+    Use the `--output` argument to change the name of the generated report file.
+    ```bash
+    python run_tests.py --output custom_report_name.md
+    ```
+
+5.  **Specify test directory:**
+    If your tests are in a directory other than `tests/`, use `--test_dir`.
+    ```bash
+    python run_tests.py --test_dir my_custom_tests/
+    ```
+
+### Test Report
+
+The generated Markdown report (`test_report.md` by default) includes:
+*   **Summary:** Total tests run, number of passed, failed, and errored tests.
+*   **Details of Failures/Errors:** For each failed or errored test:
+    *   Test name.
+    *   Description of what the test covers and its expected outcome (extracted from test docstrings).
+    *   The reason for failure, including the specific error message and a collapsible section with the full traceback.
+*   **Passed Tests Summary:** A list of all tests that passed.
+*   **All Test Results:** A comprehensive list of all tests, their status, and descriptions.
+
+The docstrings within each test method (e.g., in `tests/test_config.py`) are formatted to provide clear explanations for the report.
+
+### Pre-Push Hook
+
+To help maintain repository stability, a Git pre-push hook is recommended. This hook automatically runs all tests before a `git push` operation. If any tests fail, the push is aborted.
+
+**To set up the pre-push hook:**
+
+1.  **Content:** The content for the hook script is provided in `pre-push-hook-content.txt` in the repository root.
+2.  **Location:** Copy the content from `pre-push-hook-content.txt` into a new file named `pre-push` inside your local repository's `.git/hooks/` directory.
+    *   Example path: `your_project_root/.git/hooks/pre-push`
+3.  **Executable:** Make the hook script executable:
+    *   On Linux/macOS: `chmod +x .git/hooks/pre-push`
+    *   On Windows: This step is typically not needed if Git is configured to execute shell scripts (e.g., when using Git Bash).
+
+Once set up, `python run_tests.py` (or `python3 run_tests.py` depending on the hook script's configuration) will run automatically before every push.

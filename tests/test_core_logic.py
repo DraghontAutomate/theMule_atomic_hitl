@@ -138,9 +138,15 @@ class TestSurgicalEditorLogic(unittest.TestCase):
     def test_01_initialization(self):
         """
         Tests the initial state of the SurgicalEditorLogic after instantiation.
-        Verifies that data, config, and internal state (queue, active task) are correctly set up.
+        - What it tests: Verifies that initial data (especially main content), version,
+          config, and internal states like the edit queue and active task are correctly
+          set up upon creating a SurgicalEditorLogic instance.
+        - Expected outcome: `current_main_content` should match the configured modified field
+          from `initial_data`. Version should be initialized (e.g., to 1.0). The edit queue
+          should be an empty deque, and `active_edit_task` should be None.
+        - Reason for failure: Problems in the constructor's logic for identifying main content
+          fields from config, initializing version, or setting up internal state variables.
         """
-        print("\nRunning test_01_initialization...")
         from collections import deque # Ensure deque is available for type checking
         # Check if the main content is correctly identified from initial_data and config
         self.assertEqual(self.editor_logic.current_main_content, "This is the initial document content.")
@@ -149,19 +155,21 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         self.assertTrue(isinstance(self.editor_logic.edit_request_queue, deque))
         self.assertEqual(len(self.editor_logic.edit_request_queue), 0) # Queue should be empty
         self.assertIsNone(self.editor_logic.active_edit_task) # No active task initially
-        print("test_01_initialization PASSED")
 
     def test_02_add_edit_request_and_process_approve(self):
         """
-        Tests the full lifecycle of an edit request:
-        1. Add request (hint + instruction).
-        2. System locates snippet (mocked) and asks for location confirmation.
-        3. User confirms location.
-        4. System generates edit (mocked) and asks for diff approval.
-        5. User approves the edit.
-        Verifies state changes, callback calls, and final content.
+        Tests the full lifecycle of a single edit request, from addition to approval.
+        - What it tests: Adding a request, system locating snippet (mocked), user confirming
+          location, system generating edit (mocked), and user approving the edit.
+          It also checks callback invocations for location confirmation and diff preview.
+        - Expected outcome: The main content is updated according to the approved edit.
+          The active task is cleared. `confirm_location_details` and `show_diff_preview`
+          callbacks are called with expected arguments. `update_view` callback is triggered.
+        - Reason for failure: Issues in task state transitions (e.g., from 'new' to
+          'awaiting_location_confirmation' to 'awaiting_diff_approval' to 'completed'),
+          incorrect callback invocation or arguments, errors in the mock LLM locator/editor
+          logic, or problems with applying the approved edit to the main content.
         """
-        print("\nRunning test_02_add_edit_request_and_process_approve...")
         # Add an edit request
         self.editor_logic.add_edit_request("initial document", "make it uppercase")
 
@@ -199,20 +207,22 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         expected_content = "This is the EDITED based on 'make it uppercase': [INITIAL DOCUMENT] content."
         self.assertEqual(self.editor_logic.current_main_content, expected_content)
         self.assertTrue(self.mock_callbacks['update_view'].called) # View should be updated
-        print("test_02_add_edit_request_and_process_approve PASSED")
 
     def test_03_process_reject_clarify_then_approve(self):
         """
-        Tests the reject and clarification workflow:
-        1. Add request, confirm location, show diff.
-        2. User rejects the edit.
-        3. System requests clarification.
-        4. User provides new instruction.
-        5. System re-processes (locate, edit, diff).
-        6. User approves the second attempt.
-        Verifies state changes and callback calls throughout.
+        Tests the reject and clarification workflow followed by approval.
+        - What it tests: The sequence of a user rejecting an initial LLM-generated edit,
+          the system requesting clarification, the user providing new instructions,
+          and then the system re-processing the edit (locate, edit, diff) which is
+          subsequently approved by the user.
+        - Expected outcome: `request_clarification` callback is called after rejection.
+          After retry with new instructions, `confirm_location_details` and `show_diff_preview`
+          are called again. The final content reflects the edit made based on the
+          clarified instruction. The active task is cleared upon final approval.
+        - Reason for failure: Incorrect state transition to 'awaiting_clarification',
+          failure to re-process the task with new instructions, issues with mock LLM
+          behavior on the second attempt, or problems applying the finally approved edit.
         """
-        print("\nRunning test_03_process_reject_clarify_then_approve...")
         self.editor_logic.add_edit_request("content", "change it") # Initial request
 
         # --- First attempt (locate and show diff) ---
@@ -248,14 +258,18 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         self.editor_logic.process_llm_task_decision('approve')
         self.assertIsNone(self.editor_logic.active_edit_task) # Task completed
         self.assertTrue("EDITED based on 'make it bold': [CONTENT]" in self.editor_logic.current_main_content)
-        print("test_03_process_reject_clarify_then_approve PASSED")
 
     def test_04_process_cancel_task_after_location_confirm(self):
         """
-        Tests cancelling a task after the location has been confirmed and diff shown.
-        Verifies that the task is cleared and content remains unchanged.
+        Tests cancelling an active task after its location has been confirmed and diff shown.
+        - What it tests: The system's ability to correctly handle a 'cancel' decision
+          from the user for an active edit task that is in the 'awaiting_diff_approval' state.
+        - Expected outcome: The active task is cleared (`active_edit_task` becomes None).
+          The main document content remains unchanged from its state before the task was initiated.
+          An audit trail in `edit_results` should indicate the task was cancelled.
+        - Reason for failure: The task might not be cleared correctly, the content might be
+          erroneously modified, or the cancellation status is not recorded properly.
         """
-        print("\nRunning test_04_process_cancel_task_after_location_confirm...")
         initial_content = self.editor_logic.current_main_content # Snapshot before edit
         self.editor_logic.add_edit_request("document", "delete this part")
 
@@ -271,18 +285,21 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         self.assertIsNone(self.editor_logic.active_edit_task) # Task should be cleared
         self.assertEqual(self.editor_logic.current_main_content, initial_content) # Content should not change
         self.assertEqual(self.editor_logic.edit_results[-1]['status'], "task_cancelled") # Check audit trail
-        print("test_04_process_cancel_task_after_location_confirm PASSED")
 
     def test_05_queue_multiple_requests(self):
         """
-        Tests the queuing mechanism:
-        1. Add first request; it becomes active.
-        2. Add second request; it's added to the queue.
-        3. First request is processed and approved.
-        4. Second request becomes active and is then processed and approved.
-        Verifies queue state and correct processing order.
+        Tests the queuing mechanism for multiple edit requests.
+        - What it tests: Ensures that if a new edit request is added while another is
+          active, the new request is queued. Once the active task completes, the next
+          request from the queue is automatically dequeued and processed.
+        - Expected outcome: The first request becomes active immediately. The second request
+          is added to the queue. After the first request is fully processed and approved,
+          the second request becomes active, is processed, and its approval updates the
+          content further. The queue should be empty at the end.
+        - Reason for failure: Problems with adding requests to the queue, incorrect queue
+          size management, failure to automatically process the next item from the queue,
+          or incorrect order of processing.
         """
-        print("\nRunning test_05_queue_multiple_requests...")
         # Add first request
         self.editor_logic.add_edit_request("initial", "uppercase it")
         self.assertEqual(len(self.editor_logic.edit_request_queue), 0) # First task becomes active immediately
@@ -313,14 +330,20 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         self.editor_logic.process_llm_task_decision('approve')
         self.assertTrue("EDITED based on 'add exclamation': [CONTENT]" in self.editor_logic.current_main_content)
         self.assertIsNone(self.editor_logic.active_edit_task) # All tasks done
-        print("test_05_queue_multiple_requests PASSED")
 
     def test_06_generic_action_increment_version(self):
         """
         Tests the 'increment_version' generic action.
-        Verifies that the version in data is correctly incremented.
+        - What it tests: Verifies that performing the 'increment_version' action
+          correctly updates the version number in the `self.editor_logic.data` dictionary.
+          The version is expected to increment by 0.1.
+        - Expected outcome: The 'version' field in `self.editor_logic.data` is incremented
+          by 0.1 (and stored as a string). The `update_view` callback should be called.
+          An audit trail should record the action's success.
+        - Reason for failure: The action handler for 'increment_version' might not be
+          correctly updating the version, not converting it to a string, or not triggering
+          the necessary UI update.
         """
-        print("\nRunning test_06_generic_action_increment_version...")
         initial_version_str = self.editor_logic.data["version"] # Version might be string or float
         initial_version = float(initial_version_str) if isinstance(initial_version_str, str) else initial_version_str
 
@@ -331,16 +354,21 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         self.assertEqual(self.editor_logic.data["version"], expected_version_str)
         self.assertEqual(self.editor_logic.edit_results[-1]['status'], "action_increment_version_success")
         self.assertTrue(self.mock_callbacks['update_view'].called)
-        print("test_06_generic_action_increment_version PASSED")
 
     def test_07_generic_action_revert_changes(self):
         """
         Tests the 'revert_changes' generic action.
-        1. Makes some changes to content and version.
-        2. Calls 'revert_changes'.
-        3. Verifies that data is reverted to its initial state.
+        - What it tests: Verifies that after making some changes to the content (via an
+          edit task) and metadata (like version), performing the 'revert_changes' action
+          restores both the main content and all associated data to their original states
+          at the time of SurgicalEditorLogic instantiation.
+        - Expected outcome: `current_main_content` and `data` (including version) should
+          be identical to their initial states before any modifications. The `update_view`
+          callback should be called. An audit trail entry should confirm successful revert.
+        - Reason for failure: The revert mechanism might not be correctly restoring all
+          parts of the data, the snapshot of initial data might be corrupted or modified,
+          or UI updates might not be triggered.
         """
-        print("\nRunning test_07_generic_action_revert_changes...")
         # Capture initial state
         original_content_snapshot = str(self.editor_logic.current_main_content)
         original_version_snapshot = self.editor_logic.data["version"]
@@ -378,7 +406,6 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         self.assertEqual(self.editor_logic.current_main_content, original_content_snapshot)
         self.assertEqual(self.editor_logic.data["version"], original_version_snapshot)
         self.assertEqual(self.editor_logic.edit_results[-1]['status'], "action_revert_changes_success")
-        print("test_07_generic_action_revert_changes PASSED")
 
 if __name__ == '__main__':
     """
