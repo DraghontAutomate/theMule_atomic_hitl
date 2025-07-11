@@ -10,7 +10,8 @@ import uuid
 import json
 from typing import Callable, Dict, Any, Optional, Tuple
 from collections import deque
-from .config import Config # Import the new Config class
+from .config import Config
+from .llm_service import LLMService # Import LLMService
 
 class SurgicalEditorLogic:
     """
@@ -69,6 +70,19 @@ class SurgicalEditorLogic:
         # Use properties from Config object to get field names
         self.main_text_field = self.config_manager.main_editor_modified_field
         self.original_text_field = self.config_manager.main_editor_original_field
+
+        # Initialize LLM Service
+        try:
+            llm_actual_config = self.config_manager.get_llm_config()
+            if not llm_actual_config: # Should not happen if defaults are in place
+                print("Warning: LLM configuration missing from main config. LLM features may fail.")
+                self.llm_service = None
+            else:
+                self.llm_service = LLMService(llm_config=llm_actual_config)
+        except Exception as e:
+            print(f"Error initializing LLMService: {e}. LLM features will be disabled.")
+            self.callbacks['show_error'](f"LLMService init failed: {e}. LLM features disabled.")
+            self.llm_service = None # Ensure it's None if init fails
 
         # Ensure initial data has the necessary fields if they are missing
         if self.main_text_field not in self.data:
@@ -216,10 +230,13 @@ class SurgicalEditorLogic:
         current_hint = self.active_edit_task['user_hint']
         # IMPORTANT: Use the snapshot of content taken when the request was added to the queue.
         content_to_edit = self.active_edit_task['original_content_snapshot']
-        location = self._mock_llm_locator(content_to_edit, current_hint)
+
+        # Use the new _llm_locator method
+        location = self._llm_locator(content_to_edit, current_hint)
 
         if not location:
-            self.callbacks['show_error'](f"Locator failed to find a match for the hint: '{current_hint}'")
+            # _llm_locator itself or LLMService should call show_error if it fails.
+            # self.callbacks['show_error'](f"Locator failed to find a match for the hint: '{current_hint}'") # Redundant if _llm_locator handles it
             self.active_edit_task['status'] = 'location_failed'
             self._notify_view_update()
             # The task remains in this failed state. User might cancel or a future feature
@@ -265,8 +282,8 @@ class SurgicalEditorLogic:
         self.active_edit_task['location_info'] = location_to_use # Store potentially adjusted location
 
         snippet_to_edit = location_to_use['snippet']
-        # Use a mock LLM editor to generate the edited version of the snippet
-        edited_snippet = self._mock_llm_editor(snippet_to_edit, original_instruction)
+        # Use the new _llm_editor method
+        edited_snippet = self._llm_editor(snippet_to_edit, original_instruction)
 
         self.active_edit_task['llm_generated_snippet_details'] = {
             "start": location_to_use['start_idx'],
@@ -519,32 +536,75 @@ class SurgicalEditorLogic:
 
     # In a real application, these would involve calls to actual LLM services.
 
-    def _mock_llm_locator(self, text_to_search: str, hint: str) -> Optional[Dict[str, Any]]:
+    def _llm_locator(self, text_to_search: str, hint: str) -> Optional[Dict[str, Any]]:
         """
-        Mocks an LLM call to locate a snippet of text based on a hint.
-        Uses simple regex search for demonstration.
+        Uses LLMService to locate a snippet of text based on a hint.
+        The LLM is prompted to return the exact snippet. This method then finds the snippet
+        in the original text to determine start and end indices.
 
         Args:
             text_to_search (str): The text in which to search for the snippet.
-            hint (str): The hint to guide the search.
-
+            hint (str): The hint to guide the search (user prompt for the LLM).
 
         Returns:
             Optional[Dict[str, Any]]: A dictionary with 'start_idx', 'end_idx', and 'snippet'
                                       if found, otherwise None.
         """
-        # Using re.escape on the hint to treat it as a literal string in the regex
-        # IGNORECASE for case-insensitive matching
+        if not self.llm_service:
+            self.callbacks['show_error']("LLMService is not available. Cannot locate snippet.")
+            return None
 
-        match = re.search(re.escape(hint), text_to_search, re.IGNORECASE)
-        if match:
-            start_idx, end_idx = match.span()
-            return {"start_idx": start_idx, "end_idx": end_idx, "snippet": match.group(0)}
-        return None # Return None if no match is found
+        try:
+            # The system prompt for "locator" is defined in config and fetched by LLMService
+            # The user prompt for the locator task is the 'hint'.
+            # We expect the LLM to return the *exact text of the snippet*.
+            located_snippet_text = self.llm_service.invoke_llm(
+                task_name="locator",
+                user_prompt=f"Given the following text:\n\n---\n{text_to_search}\n---\n\nIdentify and return the exact text snippet that matches the hint: '{hint}'. Respond only with the identified snippet text and nothing else."
+            )
 
-    def _mock_llm_editor(self, snippet_to_edit: str, instruction: str) -> str:
+            if not located_snippet_text or not located_snippet_text.strip():
+                self.callbacks['show_error'](f"LLM locator returned an empty response for hint: '{hint}'")
+                return None
+
+            located_snippet_text = located_snippet_text.strip()
+
+            # Now, find this located_snippet_text within the original text_to_search
+            # This assumes the LLM returns a substring that exists in text_to_search.
+            # For robustness, consider fuzzy matching or more advanced alignment if LLM slightly alters it.
+            try:
+                start_idx = text_to_search.index(located_snippet_text)
+                end_idx = start_idx + len(located_snippet_text)
+                return {"start_idx": start_idx, "end_idx": end_idx, "snippet": located_snippet_text}
+            except ValueError:
+                # Snippet returned by LLM not found verbatim in the original text.
+                # This can happen if LLM reformats, summarizes, or hallucinates.
+                # Try a more lenient search: case-insensitive and stripping whitespace from search text
+                # This is a simple fallback. More advanced techniques might be needed.
+
+                # Attempt a regex search for the snippet, escaping regex special characters
+                # and allowing for minor variations in whitespace or case.
+                # This is a common issue with LLMs not returning exact substrings.
+                escaped_snippet = re.escape(located_snippet_text)
+                match = re.search(escaped_snippet, text_to_search, re.IGNORECASE)
+                if match:
+                    start_idx, end_idx = match.span()
+                    # Return the actual matched snippet from original text to ensure consistency
+                    actual_matched_snippet = text_to_search[start_idx:end_idx]
+                    print(f"LLM locator: Exact match failed for '{located_snippet_text}', but found '{actual_matched_snippet}' via regex.")
+                    return {"start_idx": start_idx, "end_idx": end_idx, "snippet": actual_matched_snippet}
+                else:
+                    self.callbacks['show_error'](f"LLM locator returned: '{located_snippet_text}', which was not found in the original text, even with lenient search.")
+                    return None
+
+        except Exception as e:
+            self.callbacks['show_error'](f"Error during LLM location: {str(e)}")
+            print(f"LLM Locator Exception: {e}")
+            return None
+
+    def _llm_editor(self, snippet_to_edit: str, instruction: str) -> str:
         """
-        Mocks an LLM call to edit a snippet of text based on an instruction.
+        Uses LLMService to edit a snippet of text based on an instruction.
         Performs a simple transformation for demonstration.
 
         Args:
@@ -554,7 +614,33 @@ class SurgicalEditorLogic:
         Returns:
             str: The edited snippet.
         """
-        # This is a placeholder for a real LLM call that would perform an edit.
-        # It simply prepends a fixed string and uppercases the snippet.
+        if not self.llm_service:
+            self.callbacks['show_error']("LLMService is not available. Cannot edit snippet.")
+            # Return original snippet to indicate no change was made by LLM
+            return snippet_to_edit
 
-        return f"EDITED based on '{instruction}': [{snippet_to_edit.upper()}]"
+        try:
+            # The system prompt for "editor" is defined in config and fetched by LLMService.
+            # The user prompt combines the snippet and the instruction.
+            user_prompt_for_editor = (
+                f"Original Snippet:\n---\n{snippet_to_edit}\n---\n\n"
+                f"Instruction: {instruction}\n\n"
+                f"Return only the modified snippet text. If no changes are necessary based on the instruction, return the original snippet text exactly."
+            )
+
+            edited_snippet = self.llm_service.invoke_llm(
+                task_name="editor",
+                user_prompt=user_prompt_for_editor
+            )
+
+            if edited_snippet is None: # Check if LLM returned None (e.g. error in service)
+                self.callbacks['show_error']("LLM editor returned None. Using original snippet.")
+                return snippet_to_edit
+
+            return edited_snippet.strip() # Clean whitespace
+
+        except Exception as e:
+            self.callbacks['show_error'](f"Error during LLM edit: {str(e)}")
+            print(f"LLM Editor Exception: {e}")
+            # Fallback to original snippet in case of error
+            return snippet_to_edit

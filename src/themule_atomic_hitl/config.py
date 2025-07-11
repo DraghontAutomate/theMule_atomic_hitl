@@ -26,6 +26,30 @@ DEFAULT_CONFIG = {
     ],
     "settings": {
         "defaultWindowTitle": "HITL Review Tool"
+    },
+    "llm_config": { # Added LLM configuration section
+        "providers": {
+            "google": {
+                "model": "gemini-1.5-flash-latest",
+                "temperature": 0.7,
+                "api_key_env": "GOOGLE_API_KEY"
+            },
+            "local": {
+                "model": "default/model-name", # User should override this
+                "temperature": 0.1,
+                "base_url_env": "LOCAL_LLM_BASE_URL", # e.g., http://localhost:1234/v1
+                "api_key": "unused"
+            }
+        },
+        "task_llms": { # Defines which LLM to use for which task
+            "locator": "google", # Default to google for locator
+            "editor": "google",  # Default to google for editor
+            "default": "google" # Default LLM if task-specific not set or provider fails
+        },
+        "system_prompts": { # Define system prompts here
+            "locator": "You are an expert in identifying specific UI elements in a given HTML or text structure. Respond concisely with the identified element or location.",
+            "editor": "You are an AI assistant that helps modify text or code snippets. Respond only with the modified content. If no changes are needed, return the original content."
+        }
     }
 }
 
@@ -99,6 +123,18 @@ class Config:
             if action.get("name") == action_name:
                 return action
         return None
+
+    def get_llm_config(self) -> Dict[str, Any]:
+        """Returns the LLM-specific configuration dictionary."""
+        # Ensure a deep copy of the default if no llm_config is present after merge
+        # This is important if a custom config doesn't specify llm_config at all.
+        default_llm_cfg = json.loads(json.dumps(DEFAULT_CONFIG.get("llm_config", {})))
+        return self._config.get("llm_config", default_llm_cfg)
+
+    def get_system_prompt(self, task_name: str) -> Optional[str]:
+        """Retrieves the system prompt for a given LLM task."""
+        llm_conf = self.get_llm_config()
+        return llm_conf.get("system_prompts", {}).get(task_name)
 
     @property
     def main_editor_original_field(self) -> str:
