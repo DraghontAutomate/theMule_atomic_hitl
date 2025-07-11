@@ -62,8 +62,8 @@ class SurgicalEditorLogic:
         self.edit_results = []  # Stores results of processed edits
         self.callbacks = callbacks
 
-        # Queue for edit requests: (hint, instruction, original_content_snapshot)
-        self.edit_request_queue: deque[Tuple[str, str, str]] = deque()
+        # Queue for structured edit requests
+        self.edit_request_queue: deque[Dict[str, Any]] = deque()
         self.active_edit_task: Optional[Dict[str, Any]] = None # Details of the current task being processed
 
 
@@ -155,7 +155,6 @@ class SurgicalEditorLogic:
         """
         Notifies the UI to update its view by calling the 'update_view' callback.
         Passes current data, config (as dict), and information about the edit queue.
-
         """
         queue_info = {
             "size": len(self.edit_request_queue),
@@ -163,142 +162,220 @@ class SurgicalEditorLogic:
         }
         if self.active_edit_task:
             queue_info['active_task_status'] = self.active_edit_task.get('status')
-            queue_info['active_task_hint'] = self.active_edit_task.get('user_hint')
+            # For display, use hint if available, otherwise selection text, or just ID
+            display_identifier = "Task"
+            if self.active_edit_task.get('user_hint'):
+                display_identifier = self.active_edit_task['user_hint']
+            elif self.active_edit_task.get('selection_details') and self.active_edit_task['selection_details'].get('text'):
+                s_text = self.active_edit_task['selection_details']['text']
+                display_identifier = s_text[:30] + "..." if len(s_text) > 30 else s_text
+            elif self.active_edit_task.get('id'):
+                display_identifier = f"Task ID: {self.active_edit_task['id']}"
+            queue_info['active_task_hint'] = display_identifier # Reusing this field for general task ID
 
         print(f"CORE_LOGIC (_notify_view_update): About to call update_view callback. Data: {self.data}, Config: {self.config_manager.get_config()}, QueueInfo: {queue_info}")
-        # Pass the raw dict from the config manager to the view
         self.callbacks['update_view'](self.data, self.config_manager.get_config(), queue_info)
 
-    def add_edit_request(self, hint: str, instruction: str):
+    def add_edit_request(self,
+                         instruction: str,
+                         request_type: str,
+                         hint: Optional[str] = None,
+                         selection_details: Optional[Dict[str, Any]] = None):
         """
-        Adds a new edit request to the queue.
-
-        An edit request consists of a 'hint' to locate the text snippet and an 'instruction'
-        on how to modify it. A snapshot of the current main content is taken at the time of request.
+        Adds a new structured edit request to the queue.
 
         Args:
-            hint (str): A user-provided string to help locate the snippet to be edited.
-            instruction (str): User's instruction on how to edit the snippet.
+            instruction (str): User's instruction on how to edit.
+            request_type (str): 'hint_based' or 'selection_specific'.
+            hint (Optional[str]): Hint string if request_type is 'hint_based'.
+            selection_details (Optional[Dict[str, Any]]): Dictionary with selection info
+                (text, startLineNumber, startColumn, endLineNumber, endColumn)
+                if request_type is 'selection_specific'.
         """
-        print(f"CORE_LOGIC: Adding edit request. Hint='{hint}'")
-        # Take a snapshot of the content AT THE TIME OF REQUEST.
-        # This is crucial because subsequent edits might alter the content before this request is processed.
-        # The locator should operate on this snapshot.
-        snapshot = self.current_main_content
-        self.edit_request_queue.append((hint, instruction, snapshot))
+        if request_type not in ['hint_based', 'selection_specific']:
+            self.callbacks['show_error'](f"Invalid request type: {request_type}")
+            return
+
+        if request_type == 'hint_based' and hint is None:
+            self.callbacks['show_error']("Hint is required for hint_based requests.")
+            return
+        if request_type == 'selection_specific' and selection_details is None:
+            self.callbacks['show_error']("Selection details are required for selection_specific requests.")
+            return
+
+        request_id = str(uuid.uuid4())
+        new_request = {
+            "id": request_id,
+            "type": request_type,
+            "instruction": instruction,
+            "content_snapshot": self.current_main_content, # Snapshot at time of request
+            "hint": hint,
+            "selection_details": selection_details,
+            "status": "queued" # Initial status of the request itself
+        }
+        print(f"CORE_LOGIC: Adding edit request. ID='{request_id}', Type='{request_type}'")
+        self.edit_request_queue.append(new_request)
         self._notify_view_update()
-        # If no task is currently active, start processing this new request.
+
         if not self.active_edit_task:
             self._process_next_edit_request()
 
     def _process_next_edit_request(self):
         """
         Processes the next edit request from the queue if no task is active and the queue is not empty.
-        This is the entry point for the "Gatekeeper" loop.
+        Handles both 'hint_based' and 'selection_specific' requests.
         """
         if self.active_edit_task:
             print("CORE_LOGIC: Already processing an active task. New task will wait.")
             return
         if not self.edit_request_queue:
             print("CORE_LOGIC: Edit request queue is empty.")
-            self._notify_view_update() # Ensure UI reflects empty queue status
+            self._notify_view_update()
             return
 
-        hint, instruction, original_content_snapshot = self.edit_request_queue.popleft()
-        self.active_edit_task = {
-            "user_hint": hint,
-            "user_instruction": instruction,
-            "original_content_snapshot": original_content_snapshot, # Content when request was made
-            "status": "locating_snippet", # Initial status
-            "location_info": None, # To be filled by locator
-            "llm_generated_snippet_details": None # To be filled by editor
-        }
-        print(f"CORE_LOGIC: Starting processing of task. Hint='{hint}'")
-        self._notify_view_update()
-        self._execute_llm_attempt() # Start the Gatekeeper loop
+        request_details = self.edit_request_queue.popleft()
 
-    def _execute_llm_attempt(self):
+        # Populate active_edit_task. Note: 'user_hint' and 'user_instruction' are legacy keys
+        # kept for compatibility with existing UI update logic if needed, but new logic uses request_details directly.
+        self.active_edit_task = {
+            "id": request_details["id"],
+            "type": request_details["type"],
+            "user_instruction": request_details["instruction"],
+            "original_content_snapshot": request_details["content_snapshot"],
+            "user_hint": request_details.get("hint"), # Might be None for selection_specific
+            "selection_details_from_request": request_details.get("selection_details"), # Original line/col based
+            "status": "processing_started", # Generic initial status
+            "location_info": None, # To be filled by locator or derived from selection_details
+            "llm_generated_snippet_details": None
+        }
+        print(f"CORE_LOGIC: Starting processing of task ID: {self.active_edit_task['id']}, Type: {self.active_edit_task['type']}")
+        self._notify_view_update()
+
+        if self.active_edit_task['type'] == 'hint_based':
+            self.active_edit_task['status'] = 'locating_snippet'
+            self._notify_view_update()
+            self._execute_llm_locator_attempt() # Renamed for clarity
+        elif self.active_edit_task['type'] == 'selection_specific':
+            # Convert selection_details (line/col) to char offsets and populate location_info
+            sel_details = self.active_edit_task['selection_details_from_request']
+            snapshot = self.active_edit_task['original_content_snapshot']
+
+            # Basic validation of selection_details structure
+            if not sel_details or not all(k in sel_details for k in ['text', 'startLineNumber', 'startColumn', 'endLineNumber', 'endColumn']):
+                self.callbacks['show_error'](f"Task {self.active_edit_task['id']}: Invalid selection_details provided.")
+                self.active_edit_task['status'] = 'error_bad_selection_details'
+                self.active_edit_task = None # Clear task
+                self._notify_view_update()
+                self._process_next_edit_request() # Try next
+                return
+
+            # Directly use the provided text and line/col info.
+            # The _llm_editor will work with the provided snippet text.
+            # For applying the change, we will need start/end char offsets later.
+            # For now, the 'snippet' in location_info is the selected text itself.
+            # We'll calculate precise start/end char offsets when applying the edit.
+            # This simplifies the immediate flow.
+
+            self.active_edit_task['location_info'] = {
+                'snippet': sel_details['text'],
+                # Store original line/col info, char offsets will be derived at point of modification if needed
+                # or if we decide _llm_editor strictly needs them (currently it just takes the snippet text).
+                'start_line': sel_details['startLineNumber'],
+                'start_col': sel_details['startColumn'],
+                'end_line': sel_details['endLineNumber'],
+                'end_col': sel_details['endColumn'],
+                'is_selection_based': True # Flag to indicate this location_info is from direct selection
+            }
+
+            # Directly proceed to editing this snippet
+            self.active_edit_task['status'] = 'location_predefined' # Intermediate status
+            self._notify_view_update()
+            # Call a method similar to proceed_with_edit_after_location_confirmation, but without user confirm step
+            self._initiate_llm_edit_for_task(self.active_edit_task)
+        else:
+            self.callbacks['show_error'](f"Task {self.active_edit_task['id']}: Unknown request type '{self.active_edit_task['type']}'")
+            self.active_edit_task = None # Clear task
+            self._notify_view_update()
+            self._process_next_edit_request() # Try next
+
+    def _execute_llm_locator_attempt(self):
         """
         Executes the first part of an edit task: locating the snippet based on the user's hint.
         This uses a mock LLM locator for now.
         If successful, it asks for user confirmation of the location.
         """
-        if not self.active_edit_task:
-            self.callbacks['show_error']("LLM attempt called without an active task.")
+        if not self.active_edit_task: # Should have 'user_hint' and 'original_content_snapshot'
+            self.callbacks['show_error']("LLM locator attempt called without a valid active task.")
             return
 
-        current_hint = self.active_edit_task['user_hint']
-        # IMPORTANT: Use the snapshot of content taken when the request was added to the queue.
-        content_to_edit = self.active_edit_task['original_content_snapshot']
+        current_hint = self.active_edit_task.get('user_hint')
+        content_to_search = self.active_edit_task.get('original_content_snapshot')
 
-        # Use the new _llm_locator method
-        location = self._llm_locator(content_to_edit, current_hint)
+        if not current_hint or content_to_search is None:
+             self.callbacks['show_error'](f"Task {self.active_edit_task.get('id')}: Missing hint or content snapshot for location.")
+             self.active_edit_task['status'] = 'error_missing_locator_data'
+             # Potentially clear task and move to next, or leave for user to cancel
+             self._notify_view_update()
+             return
+
+        location = self._llm_locator(content_to_search, current_hint)
 
         if not location:
-            # _llm_locator itself or LLMService should call show_error if it fails.
-            # self.callbacks['show_error'](f"Locator failed to find a match for the hint: '{current_hint}'") # Redundant if _llm_locator handles it
             self.active_edit_task['status'] = 'location_failed'
+            # _llm_locator calls show_error if it fails internally
             self._notify_view_update()
-            # The task remains in this failed state. User might cancel or a future feature
-            # could allow providing a new hint for the *same* task.
             return
 
-        self.active_edit_task['location_info'] = location
+        self.active_edit_task['location_info'] = location # Contains {'snippet', 'start_idx', 'end_idx'}
         self.active_edit_task['status'] = 'awaiting_location_confirmation'
-        # Callback to UI to confirm the located snippet
         self.callbacks['confirm_location_details'](
-            location, # Contains {'snippet', 'start_idx', 'end_idx'}
+            location,
             self.active_edit_task['user_hint'],
             self.active_edit_task['user_instruction']
         )
         self._notify_view_update()
 
-    def proceed_with_edit_after_location_confirmation(self,
-                                                       confirmed_hint_or_location_details: Dict,
-                                                       original_instruction: str):
+    def _initiate_llm_edit_for_task(self, task: Dict[str, Any]):
         """
-        Called by the UI after the user has confirmed (or corrected) the snippet location.
-        This initiates the "Worker" loop: generating the edit for the confirmed snippet.
-
-        Args:
-            confirmed_hint_or_location_details (Dict): A dictionary containing the confirmed
-                location details (e.g., 'snippet', 'start_idx', 'end_idx').
-                This could be the original location or a corrected one from the user.
-            original_instruction (str): The user's original instruction for the edit.
+        Common method to call the LLM editor for a task that has confirmed/defined location_info.
+        Updates the task with LLM output and triggers diff preview.
         """
-        if not self.active_edit_task or self.active_edit_task['status'] != 'awaiting_location_confirmation':
-            self.callbacks['show_error']("Proceed with edit called in an invalid state.")
-            return
-
-        location_to_use = confirmed_hint_or_location_details
-        # Basic validation of the confirmed location details
-        if not (isinstance(location_to_use, dict) and 'snippet' in location_to_use and
-                'start_idx' in location_to_use and 'end_idx' in location_to_use):
-            self.callbacks['show_error']("Invalid confirmed_location_details provided by UI.")
-            self.active_edit_task['status'] = 'error_in_location_confirmation'
+        if not task or 'location_info' not in task or not task['location_info']:
+            self.callbacks['show_error'](f"Task {task.get('id')}: Cannot initiate LLM edit, location_info missing or invalid.")
+            if task: task['status'] = 'error_missing_location_for_edit'
             self._notify_view_update()
             return
 
-        self.active_edit_task['location_info'] = location_to_use # Store potentially adjusted location
+        location_info = task['location_info']
+        snippet_to_edit = location_info['snippet']
+        instruction = task['user_instruction']
 
-        snippet_to_edit = location_to_use['snippet']
-        # Use the new _llm_editor method
-        edited_snippet = self._llm_editor(snippet_to_edit, original_instruction)
+        print(f"CORE_LOGIC (_initiate_llm_edit_for_task): Editing snippet for task {task.get('id')}. Snippet: '{snippet_to_edit[:50]}...'")
 
-        self.active_edit_task['llm_generated_snippet_details'] = {
-            "start": location_to_use['start_idx'],
-            "end": location_to_use['end_idx'],
-            "original_snippet": snippet_to_edit,
-            "edited_snippet": edited_snippet
+        edited_snippet = self._llm_editor(snippet_to_edit, instruction)
+
+        task['llm_generated_snippet_details'] = {
+            "original_snippet": snippet_to_edit, # This is from location_info
+            "edited_snippet": edited_snippet,
+            # If location_info contains start/end char indices, preserve them.
+            # If it's selection-based with line/col, those are stored in location_info.
+            "location_data_from_prior_step": location_info
         }
-        self.active_edit_task['status'] = 'awaiting_diff_approval'
+        task['status'] = 'awaiting_diff_approval'
 
-        # Prepare context for the diff preview
-        content_for_diff_context = self.active_edit_task['original_content_snapshot']
-        context_before = content_for_diff_context[max(0, location_to_use['start_idx']-50) : location_to_use['start_idx']]
-        context_after = content_for_diff_context[location_to_use['end_idx'] : location_to_use['end_idx']+50]
+        content_for_diff_context = task['original_content_snapshot']
 
-        # Callback to UI to show the diff and ask for approval/rejection/manual edit
+        # Determine context_before and context_after. This requires start/end character indices.
+        # If location_info has 'start_idx', use it. Otherwise, it's selection-based, and we might skip detailed context for now
+        # or convert line/col to char offsets here if strictly needed for preview (less critical than for apply).
+        # For now, let's assume 'start_idx' and 'end_idx' might be in location_info from the locator.
+        # If not, context might be less precise for selection_specific previews.
+        start_idx_for_context = location_info.get('start_idx', 0) # Default to 0 if not found
+        end_idx_for_context = location_info.get('end_idx', len(snippet_to_edit)) # Default if not found
+
+        context_before = content_for_diff_context[max(0, start_idx_for_context - 50) : start_idx_for_context]
+        context_after = content_for_diff_context[end_idx_for_context : end_idx_for_context + 50]
+
         self.callbacks['show_diff_preview'](
             snippet_to_edit,
             edited_snippet,
@@ -306,6 +383,46 @@ class SurgicalEditorLogic:
             context_after
         )
         self._notify_view_update()
+
+    def proceed_with_edit_after_location_confirmation(self,
+                                                       confirmed_location_details: Dict, # This is the new, confirmed location_info
+                                                       original_instruction: str): # Instruction is already in active_edit_task
+        """
+        Called by the UI after the user has confirmed (or corrected) the snippet location.
+        This initiates the "Worker" loop: generating the edit for the confirmed snippet.
+
+        Args:
+            confirmed_location_details (Dict): A dictionary containing the confirmed
+                location details (e.g., 'snippet', 'start_idx', 'end_idx').
+                This could be the original location or a corrected one from the user.
+            original_instruction (str): The user's original instruction for the edit.
+                (Note: instruction is already in active_edit_task, this param might be redundant
+                 if UI doesn't change it at this stage, but kept for now based on existing signature).
+        """
+        if not self.active_edit_task or self.active_edit_task['status'] != 'awaiting_location_confirmation':
+            self.callbacks['show_error']("Proceed with edit (after location confirm) called in an invalid state.")
+            return
+
+        # Basic validation of the confirmed location details from UI
+        if not (isinstance(confirmed_location_details, dict) and 'snippet' in confirmed_location_details and
+                'start_idx' in confirmed_location_details and 'end_idx' in confirmed_location_details):
+            self.callbacks['show_error']("Invalid confirmed_location_details structure provided by UI.")
+            self.active_edit_task['status'] = 'error_in_location_confirmation'
+            self._notify_view_update()
+            return
+
+        # Update the active task's location_info with the confirmed (potentially revised) details.
+        self.active_edit_task['location_info'] = confirmed_location_details
+
+        # If the original_instruction parameter differs from what's in active_edit_task,
+        # the one from the parameter (presumably from UI if it allows changes at this step) should take precedence.
+        # For now, assume active_edit_task['user_instruction'] is the one to use.
+        # If UI can change instruction at location confirmation, then:
+        # self.active_edit_task['user_instruction'] = original_instruction
+
+        print(f"CORE_LOGIC (proceed_with_edit_after_location_confirmation): Location confirmed for task {self.active_edit_task.get('id')}. Details: {confirmed_location_details}")
+        self._initiate_llm_edit_for_task(self.active_edit_task)
+
 
     def process_llm_task_decision(self, decision: str, manually_edited_snippet: Optional[str] = None):
         """
@@ -329,15 +446,72 @@ class SurgicalEditorLogic:
         original_content_for_this_task = self.active_edit_task['original_content_snapshot']
 
         if decision == 'approve':
-            start = snippet_details['start']
-            end = snippet_details['end']
-            # Use manually edited snippet if provided, otherwise use the LLM's edited snippet
+            start_offset: Optional[int] = None
+            end_offset: Optional[int] = None
+
+            location_data = snippet_details.get('location_data_from_prior_step', {})
+
+            if self.active_edit_task.get('type') == 'selection_specific' and location_data.get('is_selection_based'):
+                print(f"CORE_LOGIC (Decision): Processing selection_specific task {self.active_edit_task.get('id')}. Location data: {location_data}")
+                # Convert line/col to char offsets using the original_content_snapshot
+                offsets = self._convert_line_col_to_char_offsets(
+                    text_content=original_content_for_this_task, # Use the task's snapshot
+                    start_line_1based=location_data['start_line'],
+                    start_col_1based=location_data['start_col'],
+                    end_line_1based=location_data['end_line'],
+                    end_col_1based=location_data['end_col']
+                )
+                if offsets:
+                    start_offset, end_offset = offsets
+                    # Sanity check: does the snippet from selection_details match the text at these offsets in snapshot?
+                    # This is an important validation.
+                    expected_snippet = location_data.get('snippet', "")
+                    actual_snippet_in_snapshot = original_content_for_this_task[start_offset:end_offset]
+                    if expected_snippet != actual_snippet_in_snapshot:
+                        print(f"WARNING: Mismatch between selection_specific snippet and text at calculated offsets.")
+                        print(f"  Expected: '{expected_snippet}'")
+                        print(f"  Actual in snapshot: '{actual_snippet_in_snapshot}'")
+                        # Decide on error handling: could be an error, or proceed if offsets are trusted.
+                        # For now, proceed but log warning. Could make this a hard error.
+                        # self.callbacks['show_error']("Mismatch between selected text and snapshot content at derived offsets. Cannot apply.")
+                        # self.active_edit_task['status'] = "error_apply_failed_offset_mismatch"
+                        # self._notify_view_update()
+                        # self.active_edit_task = None
+                        # self._process_next_edit_request()
+                        # return
+                else:
+                    self.callbacks['show_error'](f"Task {self.active_edit_task.get('id')}: Failed to convert line/col to char offsets. Cannot apply edit.")
+                    self.active_edit_task['status'] = "error_apply_failed_offset_conversion"
+                    self._notify_view_update() # Show error status
+                    # Do not clear active_edit_task immediately, let user see error, perhaps they cancel.
+                    # Or, clear and move to next:
+                    self.active_edit_task = None
+                    self._process_next_edit_request()
+                    return
+            elif self.active_edit_task.get('type') == 'hint_based':
+                 # For hint_based, start/end should already be char offsets from the locator step
+                 # and stored in llm_generated_snippet_details directly or via location_data_from_prior_step
+                if 'start_idx' in location_data and 'end_idx' in location_data:
+                    start_offset = location_data['start_idx']
+                    end_offset = location_data['end_idx']
+                else: # Legacy path if snippet_details had 'start'/'end' directly
+                    start_offset = snippet_details.get('start')
+                    end_offset = snippet_details.get('end')
+
+            if start_offset is None or end_offset is None:
+                self.callbacks['show_error'](f"Task {self.active_edit_task.get('id')}: Could not determine character offsets to apply edit.")
+                self.active_edit_task['status'] = "error_apply_failed_no_offsets"
+                self._notify_view_update()
+                self.active_edit_task = None
+                self._process_next_edit_request()
+                return
+
             snippet_to_apply = manually_edited_snippet if manually_edited_snippet is not None else snippet_details['edited_snippet']
 
             # Construct the new content based on the original snapshot for this task
-            new_content_for_this_task = original_content_for_this_task[:start] + \
+            new_content_for_this_task = original_content_for_this_task[:start_offset] + \
                                         snippet_to_apply + \
-                                        original_content_for_this_task[end:]
+                                        original_content_for_this_task[end_offset:]
 
             # IMPORTANT: Apply this change to the *current* main content.
             # This assumes that the start/end indices are still valid in the context of `original_content_for_this_task`.
@@ -644,3 +818,57 @@ class SurgicalEditorLogic:
             print(f"LLM Editor Exception: {e}")
             # Fallback to original snippet in case of error
             return snippet_to_edit
+
+    def _convert_line_col_to_char_offsets(self, text_content: str, start_line_1based: int, start_col_1based: int, end_line_1based: int, end_col_1based: int) -> Optional[Tuple[int, int]]:
+        """
+        Converts 1-based line and column numbers to 0-based character offsets.
+
+        Args:
+            text_content (str): The text content where the selection was made.
+            start_line_1based (int): The 1-based starting line number.
+            start_col_1based (int): The 1-based starting column number.
+            end_line_1based (int): The 1-based ending line number.
+            end_col_1based (int): The 1-based ending column number.
+
+        Returns:
+            Optional[Tuple[int, int]]: A tuple (start_char_offset, end_char_offset), or None if conversion fails.
+        """
+        lines = text_content.splitlines(True) # Keep line endings for accurate offsets
+
+        if not (1 <= start_line_1based <= len(lines) and 1 <= end_line_1based <= len(lines)):
+            self.callbacks['show_error'](f"Line numbers out of bounds (1-{len(lines)}): Start {start_line_1based}, End {end_line_1based}")
+            return None
+
+        start_char_offset = 0
+        for i in range(start_line_1based - 1):
+            start_char_offset += len(lines[i])
+
+        # Check column bounds for start line
+        # len(lines[start_line_1based - 1]) includes newline, but Monaco col might be beyond text if on newline char itself
+        start_line_content_len = len(lines[start_line_1based - 1].rstrip('\r\n'))
+        if not (1 <= start_col_1based <= start_line_content_len + 1): # +1 to allow cursor after last char
+             self.callbacks['show_error'](f"Start column {start_col_1based} out of bounds (1-{start_line_content_len + 1}) for line {start_line_1based}.")
+             return None
+        start_char_offset += (start_col_1based - 1)
+
+        end_char_offset = 0
+        for i in range(end_line_1based - 1):
+            end_char_offset += len(lines[i])
+
+        # Check column bounds for end line
+        end_line_content_len = len(lines[end_line_1based - 1].rstrip('\r\n'))
+        if not (1 <= end_col_1based <= end_line_content_len + 1):
+            self.callbacks['show_error'](f"End column {end_col_1based} out of bounds (1-{end_line_content_len + 1}) for line {end_line_1based}.")
+            return None
+        end_char_offset += (end_col_1based - 1)
+
+        if start_char_offset > end_char_offset:
+            self.callbacks['show_error'](f"Start offset {start_char_offset} is greater than end offset {end_char_offset}.")
+            return None
+
+        # Validate that calculated offsets are within text_content bounds
+        if not (0 <= start_char_offset <= len(text_content) and 0 <= end_char_offset <= len(text_content)):
+            self.callbacks['show_error']("Calculated character offsets are out of text content bounds.")
+            return None
+
+        return start_char_offset, end_char_offset

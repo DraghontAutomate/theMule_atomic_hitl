@@ -8,40 +8,175 @@
     This file defines the layout and static elements of the user interface.
     Dynamic content and interactions are handled by frontend.js and data from the Python backend.
   -->
-
+  <link rel="stylesheet" href="css/reset.css">
   <!-- Basic styling for layout and components -->
   <style>
-    /* Reset default margins and paddings, set up flex column layout for the whole page */
-    body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; display: flex; flex-direction: column; }
+    body, html {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      display: flex;
+      flex-direction: column;
+      background-color: #f4f6f8;
+      color: #333;
+      line-height: 1.5;
+    }
 
-    /* Header: Will be populated by frontend.js based on config.json (if header fields are defined) */
-    /* This is a placeholder ID, actual header elements are dynamically created. */
-    /* #header-container { padding: 10px 15px; border-bottom: 1px solid #ccc; background: #fff; display: flex; justify-content: space-between; align-items: center; } */
+    #app-controls-container, #footer-container {
+      padding: 12px 20px;
+      border-bottom: 1px solid #dee2e6;
+      background: #ffffff;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-shrink: 0; /* Prevent shrinking */
+    }
+    #footer-container {
+      border-top: 1px solid #dee2e6;
+      border-bottom: none;
+      justify-content: center; /* Center footer content if any */
+    }
 
-    /* Main application container: holds sidebar and main body */
-    #app-container { display: flex; flex-grow: 1; min-height: 0; /* Important for flex children to scroll correctly */ }
+    #app-container {
+      display: flex;
+      flex-grow: 1;
+      min-height: 0; /* Important for flex children to scroll correctly */
+    }
 
-    /* Sidebar: For displaying data fields and action buttons defined in config.json */
-    #sidebar-container { width: 280px; padding: 15px; border-right: 1px solid #ccc; background: #f7f7f7; box-sizing: border-box; overflow-y: auto; }
+    #sidebar-container {
+      width: 320px; /* Slightly wider */
+      padding: 20px;
+      border-right: 1px solid #dee2e6;
+      background: #ffffff;
+      overflow-y: auto;
+      flex-shrink: 0; /* Prevent shrinking */
+    }
 
-    /* Main body: Where the Monaco diff editor and HITL-specific UI sections will reside */
-    #mainbody-container { flex-grow: 1; position: relative; /* For potential absolute positioning of children like editor overlays */ }
+    #mainbody-container {
+      flex-grow: 1;
+      position: relative;
+      padding: 20px; /* Add padding to main body */
+      overflow-y: auto; /* Allow main body to scroll if content overflows */
+    }
+    /* Ensure Monaco editor takes up space correctly within the padded mainbody */
+    #mainbody-container .editor-container-style { /* Assign this class to editor divs */
+        height: calc(100% - 40px); /* Adjust based on padding or other elements */
+        width: 100%;
+        border: 1px solid #dee2e6;
+    }
 
-    /* Footer: Will be populated by frontend.js based on config.json (if footer fields are defined) */
-    #footer-container { padding: 10px; border-top: 1px solid #ccc; background: #f0f0f0; text-align: center; }
 
-    /* Styling for dynamically generated field groups (labels, inputs, textareas) */
-    .field-group { margin-bottom: 15px; }
-    .field-group label { display: block; font-size: 0.8em; color: #666; margin-bottom: 3px; }
-    .field-group span, .field-group input, .field-group textarea { font-size: 1em; }
-    .field-group input, .field-group textarea { width: 100%; box-sizing: border-box; padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
-    .field-group textarea { min-height: 100px; resize: vertical; } /* Allow vertical resize for textareas */
-    .label-bold { font-size: 1.4em; font-weight: bold; } /* For prominent labels */
+    .field-group {
+      margin-bottom: 18px;
+    }
+    .field-group label {
+      display: block;
+      font-size: 0.9em; /* Slightly larger */
+      color: #555; /* Darker label */
+      margin-bottom: 6px; /* More space */
+      font-weight: 500;
+    }
+    .field-group span { font-size: 1em; color: #333; }
+    .field-group input[type="text"], .field-group textarea {
+      width: 100%;
+      padding: 10px 12px; /* More padding */
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      font-size: 0.95em;
+      line-height: 1.5;
+      transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    .field-group input[type="text"]:focus, .field-group textarea:focus {
+      border-color: #80bdff;
+      outline: 0;
+      box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    .field-group textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .label-bold {
+      font-size: 1.3em; /* Adjusted */
+      font-weight: 600; /* Bolder */
+      color: #222;
+    }
 
-    /* Styling for action buttons (dynamically generated or static) */
-    button.action-button { padding: 8px 12px; margin-left: 10px; border: 1px solid #888; background-color: #eee; cursor: pointer; }
-    button.action-button.primary { background-color: #28a745; color: white; border-color: #28a745; font-weight: bold; } /* Primary action button style */
-    #sidebar-container button.action-button { width: 100%; margin: 10px 0 0 0; } /* Sidebar buttons take full width */
+    /* General Button Styling */
+    button, .action-button {
+      padding: 10px 18px;
+      font-size: 0.95em;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out, color 0.2s ease-in-out;
+      font-weight: 500;
+      line-height: 1.5; /* Ensure text is vertically centered */
+    }
+
+    /* Default Button (e.g., general action buttons) */
+    button, .action-button {
+      background-color: #f0f0f0; /* Lighter gray */
+      border-color: #adb5bd; /* Softer border */
+      color: #333;
+    }
+    button:hover, .action-button:hover {
+      background-color: #e9ecef;
+      border-color: #999;
+    }
+    button:disabled, .action-button:disabled {
+      background-color: #e9ecef;
+      border-color: #ced4da;
+      color: #6c757d;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+
+    /* Primary Action Button (e.g., Approve, Submit) */
+    button.primary, .action-button.primary {
+      background-color: #007bff; /* Blue */
+      border-color: #007bff;
+      color: white;
+    }
+    button.primary:hover, .action-button.primary:hover {
+      background-color: #0056b3;
+      border-color: #0056b3;
+    }
+
+    /* Destructive/Cancel Action Button (e.g., Discard, Cancel) */
+    button.danger, .action-button.danger {
+        background-color: #dc3545; /* Red */
+        border-color: #dc3545;
+        color: white;
+    }
+    button.danger:hover, .action-button.danger:hover {
+        background-color: #c82333;
+        border-color: #bd2130;
+    }
+
+
+    #sidebar-container button.action-button, #sidebar-container button {
+      width: 100%;
+      margin: 10px 0 0 0;
+    }
+    /* Ensure buttons in app-controls are not full width by default */
+    #app-controls-container button { width: auto; margin-left: 0; }
+    #app-controls-container button:first-child { margin-left: 0; }
+
+    /* Spinner Styling */
+    .spinner {
+      width: 24px; /* Size of spinner */
+      height: 24px;
+      border: 3px solid rgba(0, 0, 0, 0.1); /* Light border */
+      border-radius: 50%;
+      border-left-color: #007bff; /* Spinner color (matches primary button) */
+      animation: spin 1s linear infinite;
+      margin-left: 15px; /* Space from queue status */
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
   </style>
 
   <!-- Qt WebChannel script: Essential for communication between JavaScript and the Python backend (PyQt5) -->
@@ -75,10 +210,11 @@
 <body>
   <!-- App Controls: Buttons for overall session management and initiating new edits. -->
   <div id="app-controls-container">
-    <button id="btn-approve-end-session">Approve & End Session</button>
-    <button id="btn-request-new-edit">Request New Edit</button>
+    <button id="btn-approve-end-session" class="action-button primary">Approve & End Session</button>
+    <button id="btn-request-new-edit" class="action-button">Request New Edit</button>
     <!-- Queue Status: Dynamically updated by frontend.js to show queue size and processing status. -->
     <div id="queue-status-display">Queue: 0 | Idle</div>
+    <div id="loading-spinner" class="spinner hidden"></div> <!-- Spinner element -->
   </div>
 
   <!-- Edit Request Input Area: Hidden by default, shown when user clicks 'Request New Edit'. -->
@@ -90,10 +226,14 @@
       <input type="text" id="input-hint" placeholder="e.g., 'the second paragraph', 'the function named main'">
     </div>
     <div class="field-group">
+        <button id="btn-use-selection-context" class="action-button" type="button" title="Use text selected in editor as the precise context for the edit. Disables 'Hint' field.">Use Editor Selection as Context</button>
+        <span id="selection-context-status" style="margin-left: 10px; font-style: italic;"></span>
+    </div>
+    <div class="field-group">
       <label for="input-instruction">What to Apply? (Instruction)</label>
       <textarea id="input-instruction" placeholder="e.g., 'make it more concise', 'add a parameter for X'"></textarea>
     </div>
-    <button id="btn-add-to-queue">Add to Edit Queue</button>
+    <button id="btn-add-to-queue" class="action-button primary">Add to Edit Queue</button>
   </div>
 
   <!-- Main Application Layout: Contains the sidebar and the main body content area. -->
@@ -121,19 +261,25 @@
             <label for="input-revised-hint">Revise Hint (optional, if LLM missed the spot):</label>
             <input type="text" id="input-revised-hint"> <!-- Allows user to provide a corrected hint -->
         </div>
-        <button id="btn-confirm-location">Confirm Location & Proceed with Edit</button>
-        <button id="btn-cancel-location-stage">Cancel This Edit Task</button>
+        <button id="btn-confirm-location" class="action-button primary">Confirm Location & Proceed with Edit</button>
+        <button id="btn-cancel-location-stage" class="action-button danger">Cancel This Edit Task</button>
       </div>
 
       <!-- Inner Loop Decision Area: Hidden by default. Shown after diff preview is ready. -->
       <!-- Allows user to approve, refine (not fully implemented in this example), or discard the proposed edit. -->
       <div id="inner-loop-decision-area" class="ui-section hidden">
         <h3>Review Provisional Edit</h3>
+        <div id="task-details-inner-loop" style="margin-bottom: 15px; padding: 10px; background-color: #f9f9f9; border-radius: 4px;">
+            <h4>Task Details:</h4>
+            <p><strong>Original Hint:</strong> <span id="inner-loop-hint-display"></span></p>
+            <p><strong>Original Instruction:</strong> <span id="inner-loop-instruction-display"></span></p>
+            <p><strong>LLM Used:</strong> <span id="inner-loop-llm-display">N/A</span></p> <!-- Placeholder for LLM info -->
+        </div>
         <p>The diff editor above shows the original snippet vs. the LLM's proposed change.</p>
         <button id="btn-approve-this-edit" class="action-button primary">Approve This Edit</button>
         <!-- "Refine This Edit" might involve allowing direct edits in the diff editor's modified pane -->
-        <button id="btn-refine-this-edit" class="action-button">Refine This Edit</button>
-        <button id="btn-discard-this-edit" class="action-button">Discard This Edit Task</button> <!-- This is equivalent to 'reject' in the core logic -->
+-        <button id="btn-refine-this-edit" class="action-button">Clear & Restart Task</button>
+        <button id="btn-discard-this-edit" class="action-button danger">Discard This Edit Task</button> <!-- This is equivalent to 'reject' in the core logic -->
       </div>
     </div>
   </div>
