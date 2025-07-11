@@ -190,12 +190,62 @@ class Backend(QObject):
                      logger.error(f"BACKEND (startSession): Error emitting showErrorSignal: {sig_e}")
 
 
-    @pyqtSlot(str, str)
-    def submitEditRequest(self, hint: str, instruction: str):
+    @pyqtSlot(str) # Argument is now a single JSON string
+    def submitEditRequest(self, request_payload_json: str):
         """
-        Slot called by JS to submit a new edit request (hint and instruction).
+        Slot called by JS to submit a new edit request.
+        The request_payload_json is a JSON string containing either:
+        - { type: "hint_based", hint: "...", instruction: "..." }
+        - { type: "selection_specific", selection_details: { text: "...", ...lines/cols... }, instruction: "..." }
         """
-        self.logic.add_edit_request(hint, instruction)
+        try:
+            payload = json.loads(request_payload_json)
+            logger.debug(f"BACKEND (submitEditRequest): Received payload: {payload}")
+
+            request_type = payload.get("type")
+            instruction = payload.get("instruction")
+
+            if not request_type or not instruction:
+                logger.error(f"BACKEND (submitEditRequest): Invalid payload, missing type or instruction: {payload}")
+                self.showErrorSignal.emit("Invalid edit request: type or instruction missing.")
+                return
+
+            if request_type == "hint_based":
+                hint = payload.get("hint")
+                if hint is None: # Check for None explicitly, as empty string might be valid for some reason
+                    logger.error(f"BACKEND (submitEditRequest): Missing hint for hint_based request: {payload}")
+                    self.showErrorSignal.emit("Invalid hint-based request: hint missing.")
+                    return
+                self.logic.add_edit_request(
+                    instruction=instruction,
+                    request_type=request_type,
+                    hint=hint,
+                    selection_details=None
+                )
+            elif request_type == "selection_specific":
+                selection_details = payload.get("selection_details")
+                if not selection_details or not isinstance(selection_details, dict):
+                    logger.error(f"BACKEND (submitEditRequest): Missing or invalid selection_details for selection_specific request: {payload}")
+                    self.showErrorSignal.emit("Invalid selection-specific request: selection_details missing or invalid.")
+                    return
+                self.logic.add_edit_request(
+                    instruction=instruction,
+                    request_type=request_type,
+                    hint=None,
+                    selection_details=selection_details
+                )
+            else:
+                logger.error(f"BACKEND (submitEditRequest): Unknown request type: {request_type}")
+                self.showErrorSignal.emit(f"Unknown edit request type: {request_type}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"BACKEND (submitEditRequest): JSONDecodeError: {e}. Payload was: {request_payload_json}")
+            self.showErrorSignal.emit(f"Error decoding edit request: {e}")
+        except Exception as e:
+            logger.error(f"BACKEND (submitEditRequest): Unexpected error: {e}")
+            import traceback
+            traceback.print_exc()
+            self.showErrorSignal.emit(f"Internal error processing edit request: {e}")
 
     @pyqtSlot(dict, str)
     def submitConfirmedLocationAndInstruction(self, confirmed_location_details: Dict[str, Any], original_instruction: str):
