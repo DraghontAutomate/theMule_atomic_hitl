@@ -43,6 +43,8 @@ def get_configured_mock_q_application_class():
     mock_q_application_class_for_tests.loopLevel.return_value = 0
     return mock_q_application_class_for_tests
 
+from PyQt5.QtWidgets import QMainWindow # Import QMainWindow for isinstance checks
+
 # Patch QApplication where it's imported by the modules under test
 @patch('src.themule_atomic_hitl.hitl_node.QApplication', new_callable=get_configured_mock_q_application_class)
 @patch('src.themule_atomic_hitl.runner.QApplication', new_callable=get_configured_mock_q_application_class)
@@ -99,9 +101,9 @@ class TestHitlNodeRun(unittest.TestCase):
         }
         self.assertEqual(kwargs['initial_data_param'], expected_initial_data)
 
-        # Check config_param (should be a Config instance with default config)
-        self.assertIsInstance(kwargs['config_param'], Config)
-        self.assertEqual(kwargs['config_param'].get_config(), DEFAULT_CONFIG)
+        # Check config_param_dict (should be a dict with default config values)
+        self.assertIsInstance(kwargs['config_param_dict'], dict)
+        self.assertEqual(kwargs['config_param_dict'], DEFAULT_CONFIG) # it's the dict representation
         self.assertIsNone(kwargs['qt_app']) # No existing_qt_app passed
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
@@ -118,8 +120,8 @@ class TestHitlNodeRun(unittest.TestCase):
         mock_run_application.assert_called_once()
         args, kwargs = mock_run_application.call_args
         self.assertEqual(kwargs['initial_data_param'], input_dict)
-        self.assertIsInstance(kwargs['config_param'], Config)
-        self.assertEqual(kwargs['config_param'].get_config(), DEFAULT_CONFIG)
+        self.assertIsInstance(kwargs['config_param_dict'], dict)
+        self.assertEqual(kwargs['config_param_dict'], DEFAULT_CONFIG) # it's the dict representation
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
     def test_run_with_string_content_custom_config(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp): # Added mock args
@@ -138,8 +140,14 @@ class TestHitlNodeRun(unittest.TestCase):
             "origText": test_string  # Based on custom_config_data
         }
         self.assertEqual(kwargs['initial_data_param'], expected_initial_data)
-        self.assertIsInstance(kwargs['config_param'], Config)
-        self.assertEqual(kwargs['config_param'].get_config()['settings']['defaultWindowTitle'], "Custom Test Window")
+        self.assertIsInstance(kwargs['config_param_dict'], dict)
+        # For custom config, we check a specific value rather than the whole dict equality
+        # as the hitl_node.py creates a Config object then passes its dict representation.
+        # The Config object merges custom settings with defaults.
+        self.assertEqual(kwargs['config_param_dict']['settings']['defaultWindowTitle'], self.custom_config_data['settings']['defaultWindowTitle'])
+        # We also need to ensure that default fields/actions are present if not overridden by custom config
+        self.assertEqual(kwargs['config_param_dict']['fields'][0]['name'], self.custom_config_data['fields'][0]['name'])
+
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
     def test_run_with_dict_content_missing_fields(self, mock_run_application, mock_runner_qapp, mock_hitl_qapp): # Added mock args
@@ -169,9 +177,15 @@ class TestHitlNodeRun(unittest.TestCase):
         mock_existing_app_instance = MagicMock(name="MockExistingAppInstance") # Replaced MockQApplicationInstance
 
         the_actual_mock_main_window = MagicMock(name="TheMockMainWindowInstance")
+        # Make the mock appear as an instance of QMainWindow
+        the_actual_mock_main_window.__class__ = QMainWindow
         the_actual_mock_main_window.backend = MagicMock(name="MockBackend")
         the_actual_mock_main_window.backend.sessionTerminatedSignal = MagicMock(name="MockSignal")
         the_actual_mock_main_window.backend.logic.get_final_data.return_value = self.mock_final_data
+        # QMainWindow needs isVisible() and show() methods for the logic in hitl_node_run
+        the_actual_mock_main_window.isVisible = MagicMock(return_value=False)
+        the_actual_mock_main_window.show = MagicMock()
+
 
         mock_run_application_in_test.return_value = the_actual_mock_main_window
 

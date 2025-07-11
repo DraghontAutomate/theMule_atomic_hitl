@@ -46,7 +46,8 @@ class SurgicalEditorLogic:
     def __init__(self,
                  initial_data: Dict[str, Any],
                  config: Config, # Uses Config object
-                 callbacks: Dict[str, Callable]):
+                 callbacks: Dict[str, Callable],
+                 llm_service_instance: Optional[LLMService] = None): # Added for testing
         """
         Initializes the SurgicalEditorLogic.
 
@@ -72,17 +73,20 @@ class SurgicalEditorLogic:
         self.original_text_field = self.config_manager.main_editor_original_field
 
         # Initialize LLM Service
-        try:
-            llm_actual_config = self.config_manager.get_llm_config()
-            if not llm_actual_config: # Should not happen if defaults are in place
-                print("Warning: LLM configuration missing from main config. LLM features may fail.")
-                self.llm_service = None
-            else:
-                self.llm_service = LLMService(llm_config=llm_actual_config)
-        except Exception as e:
-            print(f"Error initializing LLMService: {e}. LLM features will be disabled.")
-            self.callbacks['show_error'](f"LLMService init failed: {e}. LLM features disabled.")
-            self.llm_service = None # Ensure it's None if init fails
+        if llm_service_instance:
+            self.llm_service = llm_service_instance
+        else:
+            try:
+                llm_actual_config = self.config_manager.get_llm_config()
+                if not llm_actual_config: # Should not happen if defaults are in place
+                    print("Warning: LLM configuration missing from main config. LLM features may fail.")
+                    self.llm_service = None
+                else:
+                    self.llm_service = LLMService(llm_config=llm_actual_config)
+            except Exception as e:
+                print(f"Error initializing LLMService: {e}. LLM features will be disabled.")
+                self.callbacks['show_error'](f"LLMService init failed: {e}. LLM features disabled.")
+                self.llm_service = None # Ensure it's None if init fails
 
         # Ensure initial data has the necessary fields if they are missing
         if self.main_text_field not in self.data:
@@ -173,7 +177,7 @@ class SurgicalEditorLogic:
                 display_identifier = f"Task ID: {self.active_edit_task['id']}"
             queue_info['active_task_hint'] = display_identifier # Reusing this field for general task ID
 
-        print(f"CORE_LOGIC (_notify_view_update): About to call update_view callback. Data: {self.data}, Config: {self.config_manager.get_config()}, QueueInfo: {queue_info}")
+        # print(f"CORE_LOGIC (_notify_view_update): About to call update_view callback. Data: {self.data}, Config: {self.config_manager.get_config()}, QueueInfo: {queue_info}")
         self.callbacks['update_view'](self.data, self.config_manager.get_config(), queue_info)
 
     def add_edit_request(self,
@@ -213,7 +217,7 @@ class SurgicalEditorLogic:
             "selection_details": selection_details,
             "status": "queued" # Initial status of the request itself
         }
-        print(f"CORE_LOGIC: Adding edit request. ID='{request_id}', Type='{request_type}'")
+        # print(f"CORE_LOGIC: Adding edit request. ID='{request_id}', Type='{request_type}'")
         self.edit_request_queue.append(new_request)
         self._notify_view_update()
 
@@ -226,10 +230,10 @@ class SurgicalEditorLogic:
         Handles both 'hint_based' and 'selection_specific' requests.
         """
         if self.active_edit_task:
-            print("CORE_LOGIC: Already processing an active task. New task will wait.")
+            # print("CORE_LOGIC: Already processing an active task. New task will wait.")
             return
         if not self.edit_request_queue:
-            print("CORE_LOGIC: Edit request queue is empty.")
+            # print("CORE_LOGIC: Edit request queue is empty.")
             self._notify_view_update()
             return
 
@@ -248,7 +252,7 @@ class SurgicalEditorLogic:
             "location_info": None, # To be filled by locator or derived from selection_details
             "llm_generated_snippet_details": None
         }
-        print(f"CORE_LOGIC: Starting processing of task ID: {self.active_edit_task['id']}, Type: {self.active_edit_task['type']}")
+        # print(f"CORE_LOGIC: Starting processing of task ID: {self.active_edit_task['id']}, Type: {self.active_edit_task['type']}")
         self._notify_view_update()
 
         if self.active_edit_task['type'] == 'hint_based':
@@ -350,7 +354,7 @@ class SurgicalEditorLogic:
         snippet_to_edit = location_info['snippet']
         instruction = task['user_instruction']
 
-        print(f"CORE_LOGIC (_initiate_llm_edit_for_task): Editing snippet for task {task.get('id')}. Snippet: '{snippet_to_edit[:50]}...'")
+        # print(f"CORE_LOGIC (_initiate_llm_edit_for_task): Editing snippet for task {task.get('id')}. Snippet: '{snippet_to_edit[:50]}...'")
 
         edited_snippet = self._llm_editor(snippet_to_edit, instruction)
 
@@ -420,7 +424,7 @@ class SurgicalEditorLogic:
         # If UI can change instruction at location confirmation, then:
         # self.active_edit_task['user_instruction'] = original_instruction
 
-        print(f"CORE_LOGIC (proceed_with_edit_after_location_confirmation): Location confirmed for task {self.active_edit_task.get('id')}. Details: {confirmed_location_details}")
+        # print(f"CORE_LOGIC (proceed_with_edit_after_location_confirmation): Location confirmed for task {self.active_edit_task.get('id')}. Details: {confirmed_location_details}")
         self._initiate_llm_edit_for_task(self.active_edit_task)
 
 
@@ -440,7 +444,7 @@ class SurgicalEditorLogic:
             self.callbacks['show_error']("User decision received but task is not in 'awaiting_diff_approval' state or has no snippet details.")
             return
 
-        print(f"CORE_LOGIC: User decision for LLM task is '{decision}'")
+        # print(f"CORE_LOGIC: User decision for LLM task is '{decision}'")
         snippet_details = self.active_edit_task['llm_generated_snippet_details']
         # The content to modify is the snapshot taken when the request was made.
         original_content_for_this_task = self.active_edit_task['original_content_snapshot']
@@ -452,7 +456,7 @@ class SurgicalEditorLogic:
             location_data = snippet_details.get('location_data_from_prior_step', {})
 
             if self.active_edit_task.get('type') == 'selection_specific' and location_data.get('is_selection_based'):
-                print(f"CORE_LOGIC (Decision): Processing selection_specific task {self.active_edit_task.get('id')}. Location data: {location_data}")
+                # print(f"CORE_LOGIC (Decision): Processing selection_specific task {self.active_edit_task.get('id')}. Location data: {location_data}")
                 # Convert line/col to char offsets using the original_content_snapshot
                 offsets = self._convert_line_col_to_char_offsets(
                     text_content=original_content_for_this_task, # Use the task's snapshot
@@ -593,7 +597,7 @@ class SurgicalEditorLogic:
             self.callbacks['show_error']("Clarification received, but no active task to update or not awaiting clarification.")
             return
 
-        print("CORE_LOGIC: Retrying active task with new clarification.")
+        # print("CORE_LOGIC: Retrying active task with new clarification.")
         # Update task details with new information. The original_content_snapshot remains the same.
         self.active_edit_task['user_hint'] = new_hint if new_hint else self.active_edit_task['user_hint']
         self.active_edit_task['user_instruction'] = new_instruction if new_instruction else self.active_edit_task['user_instruction']
@@ -601,7 +605,7 @@ class SurgicalEditorLogic:
         self.active_edit_task['location_info'] = None
         self.active_edit_task['llm_generated_snippet_details'] = None
         self._notify_view_update()
-        self._execute_llm_attempt() # Retry the LLM location and edit process
+        self._execute_llm_locator_attempt() # Corrected method name
 
     def perform_action(self, action_name: str, payload: Optional[Dict[str, Any]] = None):
         """
@@ -618,7 +622,7 @@ class SurgicalEditorLogic:
         handler_method_name = f"handle_{action_name}"
         # Get the handler method, or default to handle_unknown_action if not found
         handler_method = getattr(self, handler_method_name, self.handle_unknown_action)
-        print(f"CORE_LOGIC: Received generic action '{action_name}' with payload: {payload}")
+        # print(f"CORE_LOGIC: Received generic action '{action_name}' with payload: {payload}")
         try:
             handler_method(payload)
             self.edit_results.append({
@@ -645,7 +649,7 @@ class SurgicalEditorLogic:
                                       It can also contain other fields to update in `self.data`.
         """
 
-        print("CORE_LOGIC: Handling general approve_main_content action.")
+        # print("CORE_LOGIC: Handling general approve_main_content action.")
         # Update the main text field if present in the payload
         if self.main_text_field in payload:
             self.current_main_content = payload[self.main_text_field]
@@ -657,7 +661,7 @@ class SurgicalEditorLogic:
                 self.data[key] = value
 
         self.data["status"] = "Content Approved (General)" # Example status update
-        print(f"--- General content approval. Data: {self.data} ---")
+        # print(f"--- General content approval. Data: {self.data} ---")
 
     def handle_increment_version(self, payload: Dict[str, Any]):
         """Handles the 'increment_version' action. Increments a 'version' field in data."""
@@ -678,7 +682,7 @@ class SurgicalEditorLogic:
         self.data["status"] = "Changes Reverted."
         # Any active LLM task should probably be cancelled or handled here.
         if self.active_edit_task:
-            print("CORE_LOGIC: Reverting changes with an active task. Task will be cancelled.")
+            # print("CORE_LOGIC: Reverting changes with an active task. Task will be cancelled.")
             self.edit_results.append({
                 "id": str(uuid.uuid4()), "status": "task_cancelled_on_revert",
                 "message": f"Task for hint '{self.active_edit_task['user_hint']}' cancelled due to revert."
@@ -688,7 +692,7 @@ class SurgicalEditorLogic:
             # The UI should reflect the reverted state.
         # Clear the queue as well, as its snapshots may no longer be relevant.
         if self.edit_request_queue:
-            print("CORE_LOGIC: Clearing edit request queue due to revert.")
+            # print("CORE_LOGIC: Clearing edit request queue due to revert.")
             self.edit_request_queue.clear()
 
 
