@@ -39,30 +39,36 @@ import json # For loading data and printing results
 # --- Adjust Python path for direct execution ---
 # This section allows the script to find the 'src' directory when running
 # directly from the repository, if the package hasn't been formally installed.
+# When installed as a package, these imports should work directly.
+
 try:
-    # Attempt to import assuming the package is installed or src is already in path
-    from src.themule_atomic_hitl import hitl_node_run
-    from src.themule_atomic_hitl.runner import _load_json_file # Helper for loading JSON data
-    from src.themule_atomic_hitl.config import Config # Though hitl_node_run handles Config internally
-except ImportError:
-    print("Attempting to run from source directory by adjusting Python path...")
-    # project_root should be the parent of 'examples' and 'src'
+    # This will work if the package is installed (e.g., via pip install -e .)
+    # or if the top-level project directory is in PYTHONPATH.
+    from themule_atomic_hitl import hitl_node_run
+    from themule_atomic_hitl.runner import _load_json_file
+    from themule_atomic_hitl.config import Config # Though hitl_node_run handles Config internally
+    logging.debug("Imported themule_atomic_hitl components directly.")
+except ImportError as e_installed:
+    logging.warning(f"Could not import from 'themule_atomic_hitl' directly (package not installed or not in PYTHONPATH?): {e_installed}")
+    # Fallback for running script directly from repo, assuming 'src' is sibling to 'examples'
+    # and project root needs to be in path for 'from src...' to work.
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     if project_root not in sys.path:
-        sys.path.insert(0, project_root) # Add project root to allow `from src...`
+        sys.path.insert(0, project_root)
+        logging.debug(f"Added project root to sys.path: {project_root}")
+
     try:
         from src.themule_atomic_hitl import hitl_node_run
-        from src.themule_atomic_hitl.runner import _load_json_file
-        from src.themule_atomic_hitl.config import Config
-        print(f"Successfully imported components by adding project root to sys.path: {project_root}")
-    except ImportError as e:
-        print(f"Failed to import components after adding project root ({project_root}) to sys.path: {e}")
-        print("Please ensure that the script is run from the project root or that the package is installed.")
+        from src.themule_atomic_hitl.runner import _load_json_file # Helper for loading JSON data
+        from src.themule_atomic_hitl.config import Config # Though hitl_node_run handles Config internally
+        logging.debug("Successfully imported components via 'src.' prefix after path adjustment.")
+    except ImportError as e_src:
+        logging.error(f"Failed to import components via 'src.' prefix even after path adjustment: {e_src}")
+        print(f"Failed to import components. Ensure 'themule_atomic_hitl' is installed or run from project root. Error: {e_src}", flush=True)
         sys.exit(1)
 
 
-if __name__ == "__main__":
-
+def main():
     current_dir = os.path.dirname(os.path.abspath(__file__)) # Directory of this script
 
     print("Starting HITL example demonstrations...", flush=True)
@@ -129,3 +135,6 @@ if __name__ == "__main__":
             print("Example 3: HITL tool run was cancelled or failed.")
 
     print("\nAll examples finished.")
+
+if __name__ == "__main__":
+    main()
