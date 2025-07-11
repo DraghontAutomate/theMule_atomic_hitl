@@ -1,0 +1,15 @@
+# Include the README and LICENSE files
+include README.md
+include LICENSE
+
+# Include files for the 'examples' package
+recursive-include examples *.json
+
+# Include files for the 'themule_atomic_hitl.frontend' package
+recursive-include src/themule_atomic_hitl/frontend *.html *.js
+
+# If there are other global patterns, like including all .txt files:
+# global-include *.txt
+
+# Exclude compiled Python files and caches
+global-exclude *.py[cod] __pycache__/* .DS_Store
