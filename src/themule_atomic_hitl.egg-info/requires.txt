@@ -1,6 +1,0 @@
-PyQt5
-PyQtWebEngine
-python-dotenv
-langchain-google-genai
-langchain-openai
-PyYAML

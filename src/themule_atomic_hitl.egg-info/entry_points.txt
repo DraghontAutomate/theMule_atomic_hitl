@@ -1,2 +1,0 @@
-[console_scripts]
-themule-hitl-example = examples.run_tool:main
