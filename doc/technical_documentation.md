@@ -278,6 +278,11 @@ Provides a high-level library interface to the HITL tool.
 
 This technical documentation provides a deeper dive into the implementation details of the TheMule Atomic HITL tool.
 
+## Sequence Diagrams
+
+*   [TheMule Atomic HITL Sequence Diagram](./themule_atomic_hitl_sequence_diagram.md)
+*   [LLM Prompt Tool Sequence Diagram](./llm_prompt_tool_sequence_diagram.md)
+
 ## `src/llm_prompt_tool/evaluator.py`
 
 ### Class: `ResponseEvaluator`
