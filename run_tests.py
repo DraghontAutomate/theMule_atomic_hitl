@@ -175,25 +175,26 @@ def generate_report(test_result_data, overall_stats, stream):
 def main(module_filter=None):
     # Discover tests
     loader = unittest.TestLoader()
+    suite = unittest.TestSuite()
+
     if module_filter:
         if module_filter == "themule_atomic_hitl":
-            # Specific pattern for themule_atomic_hitl tests
-            suite = loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_*.py')
-            # This simple discovery might pick up all tests. We might need to refine this
-            # if we add tests for llm_prompt_tool in a different file pattern or sub-directory.
-            # For now, assume all tests in 'tests/' are for 'themule_atomic_hitl' if filtered.
-            # A more robust way would be to inspect test modules.
+            # Load tests related to themule_atomic_hitl module
+            # Assuming test files are named after the modules they test
+            hitl_tests = loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_config.py')
+            hitl_tests.addTests(loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_core_logic.py'))
+            hitl_tests.addTests(loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_hitl_node.py'))
+            suite.addTests(hitl_tests)
         elif module_filter == "llm_prompt_tool":
-            # Placeholder: Discover tests specifically for llm_prompt_tool
-            # Example: loader.discover(start_dir=os.path.join(project_root, 'tests', 'llm_tool_tests'), pattern='test_*.py')
-            # For now, if no such tests exist, it will be an empty suite.
-            stream.write(f"Warning: Test discovery for module '{module_filter}' is not fully implemented yet or no tests exist.\n")
-            suite = unittest.TestSuite() # Empty suite
+            # Load tests for the llm_prompt_tool module
+            llm_tool_tests = loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_llm_prompt_tool.py')
+            suite.addTests(llm_tool_tests)
         else:
-            stream.write(f"Error: Unknown module filter '{module_filter}'.\n")
-            return
+            print(f"Error: Unknown module filter '{module_filter}'.")
+            sys.exit(2)
     else: # Run all tests
-        suite = loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_*.py')
+        all_tests = loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_*.py')
+        suite.addTests(all_tests)
 
     # Run tests and generate report
     # Use an in-memory stream for capturing unittest's default output if needed,

@@ -1,0 +1,59 @@
+**Technical Prompt: Finalize Refactoring and Enhancement of `tests/test_core_logic.py`**
+
+**Objective:**
+The primary goal is to finalize the refactoring of `tests/test_core_logic.py` to use a centralized, instance-based mocking strategy for `LLMService`, ensure all tests in the file pass, and enhance the tests for clarity and reporting, while **preserving valuable explanatory comments**.
+
+**Background:**
+Previous refactoring attempts to fix mocking issues in `tests/test_core_logic.py` resulted in the unintended removal of detailed, step-by-step comments from within the test methods (e.g., in `test_03_process_reject_clarify_then_approve` and `test_05_queue_multiple_requests`). These comments, which explain the different stages of the test like "--- First attempt ---", "--- User rejects ---", etc., are crucial for maintainability and understanding the test's flow. The core mocking issue also remains, where tests fail because the mock for `LLMService` is not being correctly applied, leading to `LLM Locator Exception` and other downstream errors.
+
+**Tasks to be Developed:**
+
+1.  **Reliably Refactor `tests/test_core_logic.py` Mocking Strategy:**
+    *   **Goal:** Implement a stable mocking strategy that ensures `SurgicalEditorLogic`'s `llm_service` attribute is a `MagicMock` instance for all tests in this suite.
+    *   **Recommended Approach (Direct Instance Mocking in `setUp`):**
+        *   Modify the `setUp` method of `TestSurgicalEditorLogic`.
+        *   After `self.editor_logic = SurgicalEditorLogic(...)` is instantiated, directly replace its `llm_service` attribute:
+            ```python
+            # In setUp, after self.editor_logic is created:
+            self.editor_logic.llm_service = MagicMock(spec=LLMService)
+            ```
+        *   Define a default `side_effect` function for `self.editor_logic.llm_service.invoke_llm` that can handle the mock "locator" and "editor" calls for most tests. This function should be robust enough to allow tests like `test_02`, `test_03`, `test_04`, `test_05`, and `test_07` to pass.
+        *   Remove any remaining `@patch` decorators from all test methods in the file.
+        *   Remove the `mock_llm_service_class` argument from all test method signatures.
+        *   Ensure the `unittest.mock` import is only `from unittest.mock import MagicMock`.
+
+2.  **Preserve and Restore Explanatory Comments:**
+    *   **Crucial:** During the refactoring, you **must** retain the detailed, multi-line comments inside the test methods that describe the flow of the test.
+    *   An example from a previous version of `test_03_process_reject_clarify_then_approve` to be preserved:
+        ```python
+        # --- First attempt (locate and show diff) ---
+        self.mock_callbacks['confirm_location_details'].assert_called_once()
+        # ...
+
+        # --- User rejects the first attempt ---
+        self.editor_logic.process_llm_task_decision('reject')
+        # ...
+
+        # --- User provides clarification and retries ---
+        self.editor_logic.update_active_task_and_retry(...)
+        # ...
+
+        # --- Second attempt (locate and show diff) ---
+        # ...
+
+        # --- User approves the second attempt ---
+        self.editor_logic.process_llm_task_decision('approve')
+        # ...
+        ```
+    *   Ensure these types of comments are present and correct in the final version of all relevant multi-stage tests.
+
+3.  **Ensure All Tests Pass:**
+    *   After implementing the new mocking strategy and restoring comments, run `python run_tests.py`.
+    *   Debug any remaining failures. All tests in `test_core_logic.py` must pass.
+
+4.  **Complete Test Enhancements:**
+    *   Once all tests pass, add specific and informative assertion messages to all assertions (e.g., `self.assertEqual(a, b, "Descriptive message why this should be equal")`).
+    *   Review and ensure the first line of the docstring for each test method is a clear and concise description for the test report.
+
+**Final Verification:**
+The final version of `tests/test_core_logic.py` should be clean, easy to read with its comments intact, and have all tests passing when executed via `python run_tests.py`.
