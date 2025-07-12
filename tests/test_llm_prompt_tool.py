@@ -163,8 +163,8 @@ class TestLLMPromptTool(unittest.TestCase):
         # 2. Evaluator was called to evaluate the response
         mock_evaluator_instance.evaluate_response.assert_called_once()
         eval_args, eval_kwargs = mock_evaluator_instance.evaluate_response.call_args
-        self.assertEqual(eval_kwargs['prompt'], initial_user_prompt)
-        self.assertEqual(eval_kwargs['response'], 'Mocked LLM response.')
+        self.assertEqual(eval_args[0], initial_user_prompt)
+        self.assertEqual(eval_args[1], 'Mocked LLM response.')
         self.assertIn('relevance', eval_kwargs['manual_scores'])
 
         # 3. Interaction log was updated with the evaluation

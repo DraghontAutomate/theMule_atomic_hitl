@@ -172,80 +172,26 @@ def generate_report(test_result_data, overall_stats, stream):
     stream.write("=" * 70 + "\n")
 
 
+from tests.run_test_return_report import run_tests_and_generate_report
+import json
+
 def main(module_filter=None):
-    # Discover tests
-    loader = unittest.TestLoader()
-    suite = unittest.TestSuite()
+    """
+    Main function to run tests and display the report.
+    """
+    modules_to_test = [module_filter] if module_filter else None
 
-    if module_filter:
-        if module_filter == "themule_atomic_hitl":
-            # Load tests related to themule_atomic_hitl module
-            # Assuming test files are named after the modules they test
-            hitl_tests = loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_config.py')
-            hitl_tests.addTests(loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_core_logic.py'))
-            hitl_tests.addTests(loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_hitl_node.py'))
-            suite.addTests(hitl_tests)
-        elif module_filter == "llm_prompt_tool":
-            # Load tests for the llm_prompt_tool module
-            llm_tool_tests = loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_llm_prompt_tool.py')
-            suite.addTests(llm_tool_tests)
-        else:
-            print(f"Error: Unknown module filter '{module_filter}'.")
-            sys.exit(2)
-    else: # Run all tests
-        all_tests = loader.discover(start_dir=os.path.join(project_root, 'tests'), pattern='test_*.py')
-        suite.addTests(all_tests)
+    # Generate the structured report
+    report_data = run_tests_and_generate_report(modules=modules_to_test)
 
-    # Run tests and generate report
-    # Use an in-memory stream for capturing unittest's default output if needed,
-    # but our custom result class handles most of what we need.
-    # However, TextTestRunner still prints dots/F/E, so capture that.
-    runner_output_stream = io.StringIO()
-    runner = TestReportRunner(stream=runner_output_stream, verbosity=2) # verbosity=2 for method names
+    # Print the JSON report to stdout
+    print(json.dumps(report_data, indent=4))
 
-    print(f"Running tests for: {module_filter if module_filter else 'all modules'}")
-    print("Unittest Output:")
+    # Use summary to determine exit code
+    summary = report_data.get("summary", {})
+    failed_count = summary.get("failed", 0)
+    error_count = summary.get("errors", 0)
 
-    # unittest's default runner prints to its stream directly.
-    # We can let it print to stdout for now, or capture it if we want to suppress/reformat.
-    # For simplicity, let TextTestRunner print its usual dots.
-    # Our report will follow.
-
-    # To use our custom result class for capturing details for the report:
-    custom_result = DetailedTestResult(sys.stdout, True, 2) # stream, descriptions, verbosity
-
-    overall_start_time = datetime.now()
-    suite.run(custom_result)
-    overall_end_time = datetime.now()
-
-    total_duration = overall_end_time - overall_start_time
-
-    # Print the runner's own output (dots, F, E, etc.)
-    # print("\n--- Unittest Runner Standard Output ---")
-    # print(runner_output_stream.getvalue())
-    # print("--- End Unittest Runner Standard Output ---\n")
-
-    # Prepare stats for the report
-    passed_count = len([r for r in custom_result.test_results if r['status'] == 'PASS'])
-    failed_count = len(custom_result.failures) # Failures from TextTestResult
-    error_count = len(custom_result.errors) # Errors from TextTestResult
-    total_tests = custom_result.testsRun
-
-    success_rate = (passed_count / total_tests) * 100 if total_tests > 0 else 0.0
-
-    overall_stats = {
-        "total": total_tests,
-        "passed": passed_count,
-        "failed": failed_count,
-        "errors": error_count,
-        "success_rate": success_rate,
-        "total_duration": total_duration
-    }
-
-    # Generate our custom report
-    generate_report(custom_result.test_results, overall_stats, sys.stdout)
-
-    # Return a status code (0 for success, 1 for failures/errors)
     return 0 if failed_count == 0 and error_count == 0 else 1
 
 if __name__ == "__main__":
