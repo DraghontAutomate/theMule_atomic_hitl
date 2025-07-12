@@ -2,6 +2,8 @@ import unittest
 import json
 import os
 import sys
+import tempfile
+import shutil
 
 # Adjust path to import from src
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,6 +14,9 @@ from src.themule_atomic_hitl.config import Config, DEFAULT_CONFIG
 class TestConfig(unittest.TestCase):
 
     def setUp(self):
+        # Create a temporary directory for config files
+        self.test_dir = tempfile.mkdtemp()
+
         # Create a dummy custom config file for testing
         self.custom_config_data = {
             "fields": [
@@ -32,7 +37,7 @@ class TestConfig(unittest.TestCase):
                 "anotherSetting": "customValue"
             }
         }
-        self.custom_config_path = "test_custom_config.json"
+        self.custom_config_path = os.path.join(self.test_dir, "test_custom_config.json")
         with open(self.custom_config_path, 'w') as f:
             json.dump(self.custom_config_data, f)
 
@@ -43,17 +48,13 @@ class TestConfig(unittest.TestCase):
                 "newSetting": "newValueFromPartial"
             }
         }
-        self.partial_custom_config_path = "test_partial_custom_config.json"
+        self.partial_custom_config_path = os.path.join(self.test_dir, "test_partial_custom_config.json")
         with open(self.partial_custom_config_path, 'w') as f:
             json.dump(self.partial_custom_config_data, f)
 
-
     def tearDown(self):
-        # Remove the dummy custom config file
-        if os.path.exists(self.custom_config_path):
-            os.remove(self.custom_config_path)
-        if os.path.exists(self.partial_custom_config_path):
-            os.remove(self.partial_custom_config_path)
+        # Remove the temporary directory and its contents
+        shutil.rmtree(self.test_dir)
 
     def test_load_default_config(self):
         """Verify that Config loads the DEFAULT_CONFIG correctly when no custom path is provided."""
@@ -142,15 +143,13 @@ class TestConfig(unittest.TestCase):
     def test_main_editor_fields_fallback(self):
         """Test that main editor field names fallback to defaults if no diff-editor is configured."""
         empty_config_data = {"fields": [{"name": "a", "type": "label"}], "actions": [], "settings": {}}
-        empty_config_path = "empty_fields_config.json"
+        empty_config_path = os.path.join(self.test_dir, "empty_fields_config.json")
         with open(empty_config_path, 'w') as f:
             json.dump(empty_config_data, f)
 
         config_manager = Config(custom_config_path=empty_config_path)
         self.assertEqual(config_manager.main_editor_original_field, "originalText", "Fallback original field name is incorrect.")
         self.assertEqual(config_manager.main_editor_modified_field, "editedText", "Fallback modified field name is incorrect.")
-
-        os.remove(empty_config_path)
 
 if __name__ == '__main__':
     unittest.main()
