@@ -144,4 +144,29 @@ This document provides a functional overview of the modules within the `themule_
     *   **Data Submission**: Collects data from UI fields (e.g., text from input boxes, selected options) and sends it to the Python backend when actions are triggered.
 
 This documentation should provide a clear understanding of each module's role and how they contribute to the overall functionality of TheMule Atomic HITL tool.
+
+## `llm_prompt_tool` Modules (`src/llm_prompt_tool/`)
+
+### 1. `evaluator.py`
+*   **Purpose**: To evaluate the quality of LLM responses based on a configurable set of criteria.
+*   **Key Class**: `ResponseEvaluator`
+*   **Functionality**:
+    *   **Criteria-Based Evaluation**: Evaluates LLM responses against criteria like relevance, coherence, accuracy, and completeness. Each criterion has a description, weight, and a scoring guide.
+    *   **Score Calculation**: Calculates a weighted score for each response.
+    *   **Prompt Improvement Suggestions**: Suggests improvements to system and user prompts based on the evaluation scores.
+
+### 2. `llm_tester.py`
+*   **Purpose**: To provide an interface for interacting with an LLM, with support for both mock and real models.
+*   **Key Class**: `LLMInterface`
+*   **Functionality**:
+    *   **Mock LLM**: Includes a mock LLM that returns pre-defined responses with simulated latency, for testing without API keys.
+    *   **Real LLM Integration**: Contains placeholder code for integrating with actual LLM APIs (e.g., OpenAI, Anthropic).
+    *   **Interaction Logging**: Logs all interactions with the LLM, including prompts, responses, and timestamps.
+
+### 3. `main_loop.py`
+*   **Purpose**: To orchestrate the prompt refinement process.
+*   **Functionality**:
+    *   **Refinement Cycles**: Runs a series of refinement cycles, where it gets a response from the LLM, evaluates it, and then refines the prompt for the next iteration.
+    *   **Configuration**: Allows configuration of the initial prompts, number of iterations, and LLM model to use.
+    *   **Results Logging**: Saves the results of the refinement process to a JSONL file.
 ```

@@ -277,4 +277,54 @@ Provides a high-level library interface to the HITL tool.
     *   **State Management (Minimal)**: Primarily reflects state from Python backend. May hold temporary UI state (e.g., which task is being confirmed).
 
 This technical documentation provides a deeper dive into the implementation details of the TheMule Atomic HITL tool.
+
+## `src/llm_prompt_tool/evaluator.py`
+
+### Class: `ResponseEvaluator`
+*   **Purpose**: To evaluate LLM responses based on a set of criteria.
+*   **Initialization (`__init__(self, criteria=None)`)**:
+    *   Takes an optional `criteria` dictionary; otherwise, it uses `DEFAULT_CRITERIA`.
+    *   Normalizes the weights of the criteria to ensure they sum to 1.0.
+*   **Key Methods**:
+    *   `evaluate_response(self, prompt_text: str, response_text: str, manual_scores: dict = None) -> dict`:
+        *   Evaluates a response against the configured criteria.
+        *   If `manual_scores` are provided, it uses them; otherwise, it uses mock scores.
+        *   Returns a dictionary with the overall score and a breakdown of scores for each criterion.
+    *   `suggest_prompt_improvements(self, system_prompt: str, user_prompt: str, evaluation: dict) -> tuple[str, str]`:
+        *   Suggests improvements to the system and user prompts based on the evaluation scores.
+        *   The suggestions are based on a set of heuristics.
+
+## `src/llm_prompt_tool/llm_tester.py`
+
+### Class: `LLMInterface`
+*   **Purpose**: To provide an interface to an LLM.
+*   **Initialization (`__init__(self, api_key=None, model_name="mock-model")`)**:
+    *   Takes an optional `api_key` and `model_name`.
+    *   If `model_name` is `"mock-model"`, it uses a mock LLM; otherwise, it would initialize a real LLM client.
+*   **Key Methods**:
+    *   `get_response(self, system_prompt: str, user_prompt: str) -> str`:
+        *   Gets a response from the LLM.
+        *   If using the mock LLM, it returns a random response from a predefined list.
+        *   It also logs the interaction.
+    *   `get_interaction_log(self) -> list`:
+        *   Returns the log of all interactions.
+
+## `src/llm_prompt_tool/main_loop.py`
+
+### Function: `run_refinement_cycle(llm_interface: LLMInterface, evaluator: ResponseEvaluator, current_system_prompt: str, current_user_prompt: str, iteration: int, num_total_iterations: int) -> tuple[str, str, dict]`
+*   **Purpose**: To run a single refinement cycle.
+*   **Logic**:
+    1.  Gets a response from the LLM.
+    2.  Evaluates the response.
+    3.  Suggests improvements to the prompts.
+    4.  Logs the cycle.
+*   **Returns**: The new system prompt, the new user prompt, and the cycle log.
+
+### Function: `main(args)`
+*   **Purpose**: The main function of the script.
+*   **Logic**:
+    1.  Initializes the `LLMInterface` and `ResponseEvaluator`.
+    2.  Loops through the initial user prompts.
+    3.  For each prompt, it runs a series of refinement cycles.
+    4.  Saves the results to a file.
 ```
