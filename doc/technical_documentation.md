@@ -332,4 +332,33 @@ This technical documentation provides a deeper dive into the implementation deta
     2.  Loops through the initial user prompts.
     3.  For each prompt, it runs a series of refinement cycles.
     4.  Saves the results to a file.
+
+## `src/themule_atomic_hitl/main.py`
+
+### Function: `main()`
+*   **Purpose**: The main entry point for the application.
+*   **Logic**:
+    1.  Parses command-line arguments (`--no-frontend`, `--config`, `--data`).
+    2.  Initializes the `Config` object.
+    3.  Loads initial data from a file or uses a default.
+    4.  If `--no-frontend` is specified, it runs the terminal interface; otherwise, it runs the GUI application.
+
+## `src/themule_atomic_hitl/terminal_interface.py`
+
+### Class: `TerminalInterface`
+*   **Purpose**: To provide a terminal-based interface for the Surgical Editor.
+*   **Initialization (`__init__(self, initial_data: Dict[str, Any], config: Config)`)**:
+    *   Initializes the `SurgicalEditorLogic` with terminal-specific callbacks.
+*   **Key Methods**:
+    *   `run(self) -> Dict[str, Any]`: Starts the main loop for the terminal interface.
+    *   `display_main_menu(self)`: Displays the main menu of options.
+    *   `handle_new_edit_request(self)`: Handles the creation of a new edit request.
+    *   `on_update_view(self, data: Dict[str, Any], config_dict: Dict[str, Any], queue_info: Dict[str, Any])`: Callback to update the view.
+    *   `on_show_diff_preview(self, original_snippet: str, edited_snippet: str, before_context: str, after_context: str)`: Callback to show a diff preview.
+    *   `on_request_clarification(self)`: Callback to request clarification.
+    *   `on_show_error(self, msg: str)`: Callback to display an error message.
+    *   `on_confirm_location_details(self, location_info: dict, original_hint: str, original_instruction: str)`: Callback to confirm a located snippet.
+
+### Function: `run_terminal_interface(initial_data: Dict[str, Any], config: Config) -> Dict[str, Any]`
+*   **Purpose**: Sets up and runs the terminal-based interface.
 ```

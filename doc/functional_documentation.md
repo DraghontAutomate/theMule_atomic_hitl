@@ -169,4 +169,19 @@ This documentation should provide a clear understanding of each module's role an
     *   **Refinement Cycles**: Runs a series of refinement cycles, where it gets a response from the LLM, evaluates it, and then refines the prompt for the next iteration.
     *   **Configuration**: Allows configuration of the initial prompts, number of iterations, and LLM model to use.
     *   **Results Logging**: Saves the results of the refinement process to a JSONL file.
+
+## `main.py`
+*   **Purpose**: Serves as the main entry point for the application.
+*   **Functionality**:
+    *   **Command-line Argument Parsing**: Parses command-line arguments to determine the application's mode (GUI or terminal) and to load custom configuration and initial data files.
+    *   **Configuration and Data Loading**: Initializes the `Config` object and loads initial data from specified files.
+    *   **Application Launch**: Launches either the GUI or terminal interface based on the parsed arguments.
+
+## `terminal_interface.py`
+*   **Purpose**: Provides a terminal-based interface for the Surgical Editor.
+*   **Key Class**: `TerminalInterface`
+*   **Functionality**:
+    *   **User Interaction**: Handles user interaction in the terminal, including displaying menus, receiving input, and showing information from the core logic.
+    *   **Core Logic Integration**: Instantiates and interacts with the `SurgicalEditorLogic` class, providing terminal-specific callbacks for UI updates.
+    *   **Main Loop**: Runs a main loop to handle user input and display information when the core logic is idle.
 ```

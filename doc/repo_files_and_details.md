@@ -31,12 +31,14 @@
 │       ├── core.py
 │       ├── frontend
 │       │   ├── css
-│       │   │   └── styles.css
+│       │   │   └── reset.css
 │       │   ├── frontend.js
 │       │   └── index.html
 │       ├── hitl_node.py
 │       ├── llm_service.py
+│       ├── main.py
 │       └── runner.py
+│       └── terminal_interface.py
 └── tests
     ├── asimov_mule_analysis.txt
     ├── bruce_lee_zend_martial_arts.txt
@@ -80,12 +82,14 @@
         *   `core.py`: The core logic of the tool.
         *   `frontend/`: A directory containing the tool's frontend code.
             *   `css/`: A directory containing the tool's CSS files.
-                *   `styles.css`: The main CSS file for the tool.
+                *   `reset.css`: The main CSS file for the tool.
             *   `frontend.js`: The main JavaScript file for the tool.
             *   `index.html`: The main HTML file for the tool.
         *   `hitl_node.py`: A module for running the tool as a library.
         *   `llm_service.py`: A module for interacting with an LLM.
+        *   `main.py`: The main entry point for the application.
         *   `runner.py`: A module for running the tool's GUI.
+        *   `terminal_interface.py`: A module for running the tool's terminal interface.
 *   **tests/**: A directory containing the project's tests.
     *   `asimov_mule_analysis.txt`: A text file for testing.
     *   `bruce_lee_zend_martial_arts.txt`: A text file for testing.

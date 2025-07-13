@@ -107,21 +107,24 @@ Here's a breakdown of how the modules interact, primarily based on import statem
 ## Visual Representation (Textual Hierarchy)
 
 ```
-(Entry Point, e.g., examples/run_tool.py)
-  └── calls src.themule_atomic_hitl.hitl_node_run
-      └── src.themule_atomic_hitl.hitl_node.py (hitl_node_run)
+(Entry Point, e.g., src/themule_atomic_hitl/main.py)
+  └── calls src.themule_atomic_hitl.runner.run_application or src.themule_atomic_hitl.terminal_interface.run_terminal_interface
+      └── src.themule_atomic_hitl.runner.py (run_application, Backend, MainWindow)
           ├── Uses src.themule_atomic_hitl.config.Config
-          └── Calls src.themule_atomic_hitl.runner.run_application
-              └── src.themule_atomic_hitl.runner.py (run_application, Backend, MainWindow)
-                  ├── Uses src.themule_atomic_hitl.config.Config
-                  ├── Instantiates Backend
-                  │   └── Instantiates src.themule_atomic_hitl.core.SurgicalEditorLogic
-                  │       ├── Uses src.themule_atomic_hitl.config.Config
-                  │       └── Instantiates src.themule_atomic_hitl.llm_service.LLMService
-                  │           └── (Interacts with LLM APIs: Google, OpenAI-compatible)
-                  ├── Loads src.themule_atomic_hitl.frontend/index.html
-                  │   └── Loads src.themule_atomic_hitl.frontend/frontend.js
-                  └── (PyQt5 components for UI and WebChannel)
+          ├── Instantiates Backend
+          │   └── Instantiates src.themule_atomic_hitl.core.SurgicalEditorLogic
+          │       ├── Uses src.themule_atomic_hitl.config.Config
+          │       └── Instantiates src.themule_atomic_hitl.llm_service.LLMService
+          │           └── (Interacts with LLM APIs: Google, OpenAI-compatible)
+          ├── Loads src.themule_atomic_hitl.frontend/index.html
+          │   └── Loads src.themule_atomic_hitl.frontend/frontend.js
+          └── (PyQt5 components for UI and WebChannel)
+      └── src.themule_atomic_hitl.terminal_interface.py (run_terminal_interface, TerminalInterface)
+          ├── Uses src.themule_atomic_hitl.config.Config
+          └── Instantiates src.themule_atomic_hitl.core.SurgicalEditorLogic
+              ├── Uses src.themule_atomic_hitl.config.Config
+              └── Instantiates src.themule_atomic_hitl.llm_service.LLMService
+                  └── (Interacts with LLM APIs: Google, OpenAI-compatible)
 
 src.themule_atomic_hitl.__init__.py
   ├── Imports from .runner
