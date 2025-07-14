@@ -1,186 +1,114 @@
-# src/themule_atomic_hitl/terminal_interface.py
+import argparse
+import logging
+import os
+import sys
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
-from .core import SurgicalEditorLogic
-from .config import Config
+# It's good practice to set up logging at the very beginning.
+# This will catch logs from all imported modules.
+try:
+    from .logging_config import setup_logging
+except ImportError:
+    from logging_config import setup_logging
 
-class TerminalInterface:
+setup_logging()
+
+# Now, import your application-specific modules
+try:
+    from .config import Config
+    from .runner import run_application, Backend
+    # We will create this terminal_interface module in the next step
+    # from .terminal_interface import run_terminal_interface
+except ImportError:
+    # This allows the script to be run from the root directory for development
+    from config import Config
+    from runner import run_application, Backend
+    # from terminal_interface import run_terminal_interface
+
+
+def _load_json_file(path: str) -> Dict[str, Any]:
     """
-    A terminal-based interface for the Surgical Editor.
-    This class orchestrates the user interaction in the terminal,
-    receiving input and displaying information from the core logic.
+    Helper function to load data from a JSON file.
     """
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        logging.error(f"Error loading JSON from {path}: {e}")
+        return {}
 
-    def __init__(self, initial_data: Dict[str, Any], config: Config):
-        """
-        Initializes the TerminalInterface.
+def main():
+    """
+    Main entry point for the application.
+    Parses command-line arguments to determine which interface to run (GUI or Terminal).
+    """
+    parser = argparse.ArgumentParser(description="TheMule Atomic HITL Surgical Editor")
+    parser.add_argument(
+        '--no-frontend',
+        action='store_true',
+        help="Run the application in terminal mode without the GUI frontend."
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default=None,
+        help="Path to a custom JSON configuration file."
+    )
+    parser.add_argument(
+        '--data',
+        type=str,
+        default=None,
+        help="Path to the initial JSON data file."
+    )
 
-        Args:
-            initial_data (Dict[str, Any]): The initial data for the editor.
-            config (Config): The configuration object.
-        """
-        self.config = config
-        self.is_session_active = True
+    args = parser.parse_args()
 
-        # Define callbacks that SurgicalEditorLogic will use to communicate back
-        logic_callbacks = {
-            'update_view': self.on_update_view,
-            'show_diff_preview': self.on_show_diff_preview,
-            'request_clarification': self.on_request_clarification,
-            'show_error': self.on_show_error,
-            'confirm_location_details': self.on_confirm_location_details,
+    # --- Configuration Loading ---
+    if args.config:
+        app_config = Config(custom_config_path=args.config)
+    else:
+        # Load default config if no path is provided
+        # This assumes a default config can be found or is embedded in the Config class
+        app_config = Config()
+
+    # --- Initial Data Loading ---
+    initial_app_data = None
+    if args.data:
+        initial_app_data = _load_json_file(args.data)
+
+    if not initial_app_data:
+        logging.warning("No initial data file provided or file is empty. Using minimal default data.")
+        # Use main_editor_modified_field from config to structure default data
+        m_field = app_config.main_editor_modified_field
+        o_field = app_config.main_editor_original_field
+        initial_app_data = {
+            m_field: "Default content for main execution.",
+            o_field: "Default content for main execution.",
+            "status": "Initial Load"
         }
 
-        # Instantiate the core logic engine
-        self.logic = SurgicalEditorLogic(initial_data, self.config, logic_callbacks)
+    # --- Application Mode Selection ---
+    if args.no_frontend:
+        logging.info("Starting in Terminal Mode...")
+        # This function will be created in the next step
+        # final_data = run_terminal_interface(initial_app_data, app_config)
+        # logging.info("\n--- Terminal session finished ---")
+        # if final_data:
+        #     logging.info(json.dumps(final_data, indent=2))
+        logging.warning("Terminal interface is not yet implemented.")
 
-    def run(self) -> Dict[str, Any]:
-        """
-        Starts the main loop for the terminal interface.
+    else:
+        logging.info("Starting in GUI Mode...")
+        # We need to get the config as a dictionary for the runner
+        config_dict = app_config.get_config()
+        # The run_application function from runner.py will handle the GUI
+        final_data = run_application(initial_app_data, config_dict, qt_app=None)
 
-        Returns:
-            Dict[str, Any]: The final data after the session is terminated.
-        """
-        print("--- Terminal Surgical Editor ---")
-        self.logic.start_session() # Start the logic processing loop
+        logging.info("\n--- GUI session finished ---")
+        if final_data:
+            logging.info("Final data returned:")
+            logging.info(json.dumps(final_data, indent=2))
 
-        while self.is_session_active:
-            # The core logic runs in a separate thread, so the main loop here
-            # is for handling user input when the logic is idle.
-            self.display_main_menu()
-
-        print("\n--- Session Terminated ---")
-        return self.logic.get_final_data()
-
-    def display_main_menu(self):
-        """
-        Displays the main menu of options to the user.
-        """
-        print("\n--- Main Menu ---")
-        print("1. Request New Edit")
-        print("2. View Current Data")
-        print("3. View Edit Queue")
-        print("4. Terminate Session")
-
-        choice = input("Enter your choice: ")
-        if choice == '1':
-            self.handle_new_edit_request()
-        elif choice == '2':
-            self.display_current_data()
-        elif choice == '3':
-            self.display_queue_status()
-        elif choice == '4':
-            self.logic.perform_action("terminate", {})
-            self.is_session_active = False
-        else:
-            print("Invalid choice. Please try again.")
-
-    def handle_new_edit_request(self):
-        """
-        Handles the process of creating a new edit request from the user.
-        """
-        print("\n--- New Edit Request ---")
-        hint = input("Enter hint (where to edit): ")
-        instruction = input("Enter instruction (what to apply): ")
-
-        self.logic.add_edit_request(
-            instruction=instruction,
-            request_type="hint_based",
-            hint=hint,
-            selection_details=None
-        )
-
-    def display_current_data(self):
-        """
-        Displays the current state of the data.
-        """
-        print("\n--- Current Data ---")
-        print(json.dumps(self.logic.data, indent=2))
-
-    def display_queue_status(self):
-        """
-        Displays the current status of the edit queue.
-        """
-        queue_info = self.logic.get_queue_info()
-        print("\n--- Queue Status ---")
-        print(f"Queue size: {queue_info['size']}")
-        print(f"Is processing: {queue_info['is_processing']}")
-        if queue_info['is_processing']:
-            print(f"Active task hint: {queue_info['active_task_hint']}")
-            print(f"Active task status: {queue_info['active_task_status']}")
-
-    # --- Callbacks from SurgicalEditorLogic ---
-
-    def on_update_view(self, data: Dict[str, Any], config_dict: Dict[str, Any], queue_info: Dict[str, Any]):
-        """
-        Callback executed by SurgicalEditorLogic to update the view.
-        In the terminal, this might just be a notification.
-        """
-        print("\n[SYSTEM] View updated.")
-        self.display_queue_status()
-
-    def on_show_diff_preview(self, original_snippet: str, edited_snippet: str, before_context: str, after_context: str):
-        """
-        Callback to show a diff preview to the user in the terminal.
-        """
-        print("\n--- Review Proposed Edit ---")
-        print("Original Snippet:")
-        print(original_snippet)
-        print("\nEdited Snippet:")
-        print(edited_snippet)
-
-        decision = input("Approve (a), Reject (r), or Cancel (c)? ").lower()
-        if decision == 'a':
-            self.logic.process_llm_task_decision('approve', edited_snippet)
-        elif decision == 'r':
-            self.logic.process_llm_task_decision('reject', None)
-        else:
-            self.logic.process_llm_task_decision('cancel', None)
-
-    def on_request_clarification(self):
-        """
-        Callback to request clarification from the user.
-        """
-        print("\n--- Clarification Needed ---")
-        new_hint = input("Enter a new or revised hint: ")
-        new_instruction = input("Enter a new or revised instruction: ")
-        self.logic.update_active_task_and_retry(new_hint, new_instruction)
-
-    def on_show_error(self, msg: str):
-        """
-        Callback to display an error message.
-        """
-        print(f"\n[ERROR] {msg}")
-
-    def on_confirm_location_details(self, location_info: dict, original_hint: str, original_instruction: str):
-        """
-        Callback to ask the user to confirm a located text snippet.
-        """
-        print("\n--- Confirm Location ---")
-        print(f"Original Hint: {original_hint}")
-        print("Located Snippet:")
-        print(location_info['snippet'])
-
-        confirmed = input("Is this the correct location? (y/n): ").lower()
-        if confirmed == 'y':
-            self.logic.proceed_with_edit_after_location_confirmation(location_info, original_instruction)
-        else:
-            # If the user rejects, we can treat it as a cancellation of this task
-            print("Location rejected. Cancelling this edit task.")
-            self.logic.process_llm_task_decision('cancel', None)
-
-
-def run_terminal_interface(initial_data: Dict[str, Any], config: Config) -> Dict[str, Any]:
-    """
-    Sets up and runs the terminal-based interface.
-
-    Args:
-        initial_data (Dict[str, Any]): The initial data for the editor.
-        config (Config): The configuration object.
-
-    Returns:
-        Dict[str, Any]: The final data after the session.
-    """
-    terminal_app = TerminalInterface(initial_data, config)
-    return terminal_app.run()
+if __name__ == '__main__':
+    main()
