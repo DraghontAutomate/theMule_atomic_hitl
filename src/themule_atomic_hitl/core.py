@@ -8,7 +8,7 @@ for a human-in-the-loop editing process.
 import re
 import uuid
 import json
-from typing import Callable, Dict, Any, Optional, Tuple
+from typing import Callable, Dict, Any, Optional, Tuple, Union
 from collections import deque
 from .config import Config
 from .llm_service import LLMService # Import LLMService
@@ -44,7 +44,7 @@ class SurgicalEditorLogic:
         original_text_field (str): The key in `self.data` that might hold an original version for diffing (if configured).
     """
     def __init__(self,
-                 initial_data: Dict[str, Any],
+                 initial_data: Union[Dict[str, Any], str],
                  config: Config, # Uses Config object
                  callbacks: Dict[str, Callable],
                  llm_service_instance: Optional[LLMService] = None): # Added for testing
@@ -52,12 +52,24 @@ class SurgicalEditorLogic:
         Initializes the SurgicalEditorLogic.
 
         Args:
-            initial_data (Dict[str, Any]): The initial data to be edited.
+            initial_data (Union[Dict[str, Any], str]): The initial data to be edited.
             config (Config): The Config object for the editor.
             callbacks (Dict[str, Callable]): Callbacks for UI interaction.
         """
-        self.data = initial_data
-        self._initial_data_snapshot = json.loads(json.dumps(initial_data)) # Deep copy for revert
+        # Use properties from Config object to get field names
+        self.main_text_field = config.main_editor_modified_field
+        self.original_text_field = config.main_editor_original_field
+
+        if isinstance(initial_data, str):
+            self.data = {
+                self.main_text_field: initial_data,
+                self.original_text_field: initial_data,
+                 "status": "Loaded from raw text"
+            }
+        else:
+            self.data = initial_data
+
+        self._initial_data_snapshot = json.loads(json.dumps(self.data))
         self.config_manager = config # Store the Config object
 
         self.edit_results = []  # Stores results of processed edits
@@ -66,11 +78,6 @@ class SurgicalEditorLogic:
         # Queue for structured edit requests
         self.edit_request_queue: deque[Dict[str, Any]] = deque()
         self.active_edit_task: Optional[Dict[str, Any]] = None # Details of the current task being processed
-
-
-        # Use properties from Config object to get field names
-        self.main_text_field = self.config_manager.main_editor_modified_field
-        self.original_text_field = self.config_manager.main_editor_original_field
 
         # Initialize LLM Service
         if llm_service_instance:
