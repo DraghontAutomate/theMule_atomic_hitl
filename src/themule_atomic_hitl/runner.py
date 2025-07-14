@@ -84,12 +84,12 @@ class Backend(QObject):
     # Signal to indicate session termination, so the calling function can retrieve data
     sessionTerminatedSignal = pyqtSignal()
 
-    def __init__(self, initial_data: Dict[str, Any], config_manager: Config, parent: Optional[QObject] = None):
+    def __init__(self, initial_data: Union[Dict[str, Any], str], config_manager: Config, parent: Optional[QObject] = None):
         """
         Initializes the Backend object.
 
         Args:
-            initial_data (Dict[str, Any]): The initial data for the editor.
+            initial_data (Union[Dict[str, Any], str]): The initial data for the editor.
             config_manager (Config): The Config object containing configuration settings.
             parent (Optional[QObject]): The parent QObject, if any.
         """
@@ -319,7 +319,7 @@ class MainWindow(QMainWindow):
     It initializes the Backend, QWebChannel, and loads the frontend HTML.
     """
     def __init__(self,
-                 initial_data: Dict[str, Any],
+                 initial_data: Union[Dict[str, Any], str],
                  config_dict_param: Dict[str, Any], # Changed
                  app_instance: QApplication, # Expects the QApplication instance
                  parent: Optional[QObject] = None):
@@ -328,7 +328,7 @@ class MainWindow(QMainWindow):
         Initializes the MainWindow.
 
         Args:
-            initial_data (Dict[str, Any]): The initial data for the editor.
+            initial_data (Union[Dict[str, Any], str]): The initial data for the editor.
             config_dict_param (Dict[str, Any]): The configuration dictionary. # Changed
             app_instance (QApplication): The current QApplication instance.
             parent (Optional[QObject]): The parent QObject, if any.
@@ -392,7 +392,7 @@ class MainWindow(QMainWindow):
 # The _load_json_file helper is at the top of the file.
 # It's renamed from _load_data_file (my version) to _load_json_file (main's version) for consistency.
 
-def run_application(initial_data_param: Dict[str, Any],
+def run_application(initial_data_param: Union[Dict[str, Any], str],
                       config_param_dict: Dict[str, Any], # Changed
                       qt_app: Optional[QApplication] = None) -> Optional[Union[Dict[str,Any], QMainWindow]]:
     """
