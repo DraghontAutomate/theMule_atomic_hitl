@@ -172,6 +172,7 @@ def generate_report(test_result_data, overall_stats, stream):
     stream.write("=" * 70 + "\n")
 
 
+
 from tests.run_test_return_report import run_tests_and_generate_report
 import json
 
@@ -191,6 +192,7 @@ def main(module_filter=None):
     summary = report_data.get("summary", {})
     failed_count = summary.get("failed", 0)
     error_count = summary.get("errors", 0)
+
 
     return 0 if failed_count == 0 and error_count == 0 else 1
 

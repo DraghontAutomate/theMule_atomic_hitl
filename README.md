@@ -57,7 +57,9 @@ A custom script, `run_tests.py`, is provided to discover, run, and report on all
     # Run tests only for the llm_prompt_tool module
     python run_tests.py llm_prompt_tool
     ```
+    
 The script will output a detailed, human-readable report to the console, summarizing the results and detailing any failures or errors. For more detailed documentation on the `llm_prompt_tool`, please see [`doc/llm_prompt_tool_description.md`](doc/llm_prompt_tool_description.md).
+
 
 ### Pre-Push Hook (Recommended for Developers)
 

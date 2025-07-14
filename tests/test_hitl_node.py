@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import QMainWindow
 
 @patch('src.themule_atomic_hitl.runner.QApplication', MagicMock())
 @patch('src.themule_atomic_hitl.hitl_node.QApplication', MagicMock())
+
 class TestHitlNodeRun(unittest.TestCase):
 
     def setUp(self):
@@ -65,8 +66,10 @@ class TestHitlNodeRun(unittest.TestCase):
 
         # Check config_param_dict (should be a dict with default config values)
         self.assertIsInstance(kwargs['config_param_dict'], dict)
+
         self.assertEqual(kwargs['config_param_dict'], DEFAULT_CONFIG)
         self.assertIsNone(kwargs['qt_app'])
+
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
     def test_run_with_dict_content_default_config(self, mock_run_application):
@@ -83,7 +86,9 @@ class TestHitlNodeRun(unittest.TestCase):
         args, kwargs = mock_run_application.call_args
         self.assertEqual(kwargs['initial_data_param'], input_dict)
         self.assertIsInstance(kwargs['config_param_dict'], dict)
-        self.assertEqual(kwargs['config_param_dict'], DEFAULT_CONFIG)
+
+        self.assertEqual(kwargs['config_param_dict'], DEFAULT_CONFIG) # it's the dict representation
+
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
     def test_run_with_string_content_custom_config(self, mock_run_application):
@@ -105,6 +110,7 @@ class TestHitlNodeRun(unittest.TestCase):
         self.assertIsInstance(kwargs['config_param_dict'], dict)
         self.assertEqual(kwargs['config_param_dict']['settings']['defaultWindowTitle'], self.custom_config_data['settings']['defaultWindowTitle'])
         self.assertEqual(kwargs['config_param_dict']['fields'][0]['name'], self.custom_config_data['fields'][0]['name'])
+
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
     def test_run_with_dict_content_missing_fields(self, mock_run_application):
@@ -137,6 +143,7 @@ class TestHitlNodeRun(unittest.TestCase):
         mock_main_window.backend.logic.get_final_data.return_value = self.mock_final_data
         mock_main_window.isVisible.return_value = False
         mock_run_application.return_value = mock_main_window
+
 
         result = hitl_node_run(content_to_review="test for existing app", existing_qt_app=mock_existing_app_instance)
 
