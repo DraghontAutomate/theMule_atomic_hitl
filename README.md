@@ -168,7 +168,9 @@ See `examples/config.json` for a detailed example of the configuration structure
 
 ## Running Examples Locally
 
-The `examples/run_tool.py` script demonstrates various ways to use `hitl_node_run`.
+The `examples/run_tool.py` script demonstrates various ways to use `hitl_node_run` for GUI-based interaction.
+
+For command-line usage, the `examples/run_terminal.sh` script shows how to start the application in terminal mode, passing data and configuration files directly.
 
 ### Dependencies
 
