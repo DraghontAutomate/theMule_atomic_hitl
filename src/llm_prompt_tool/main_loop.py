@@ -1,5 +1,5 @@
-from llm_tester import LLMInterface, interaction_log # interaction_log for updating
-from evaluator import ResponseEvaluator, DEFAULT_CRITERIA
+from .llm_tester import LLMInterface, interaction_log # interaction_log for updating
+from .evaluator import ResponseEvaluator, DEFAULT_CRITERIA
 import json
 import os
 import argparse

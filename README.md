@@ -26,6 +26,55 @@ This makes it adaptable for various scenarios where careful, step-by-step oversi
     *   *Gatekeeper Loop:* User confirms the location of the text to be edited.
     *   *Worker Loop:* User reviews and approves/rejects the proposed edit to the snippet.
 *   **Metadata Display:** Show relevant metadata alongside the content being edited.
+*   **Automated Testing**: Comes with a full test suite and a reporting script (`run_tests.py`).
+*   **Git Pre-Push Hook**: Includes a pre-push hook script (`pre-push-hook.sh`) to ensure repository stability by running tests before every push.
+
+## Testing and Quality Assurance
+
+This project includes a comprehensive test suite to ensure stability and correctness.
+
+### Running Tests
+
+A custom script, `run_tests.py`, is provided to discover, run, and report on all unit tests in the repository.
+
+1.  **Install Dependencies:** Ensure all project and development dependencies are installed.
+    ```bash
+    # This installs the package itself and all dependencies from requirements.txt
+    pip install .
+    ```
+
+2.  **Run Full Test Suite:**
+    ```bash
+    python run_tests.py
+    ```
+
+3.  **Run Tests for a Specific Module:**
+    The script can target specific modules within the `src` directory.
+    ```bash
+    # Run tests only for the themule_atomic_hitl module
+    python run_tests.py themule_atomic_hitl
+
+    # Run tests only for the llm_prompt_tool module
+    python run_tests.py llm_prompt_tool
+    ```
+The script will output a detailed, human-readable report to the console, summarizing the results and detailing any failures or errors.
+
+### Pre-Push Hook (Recommended for Developers)
+
+To automatically run the test suite before every `git push` and prevent pushing broken code, a pre-push hook is provided.
+
+**Installation:**
+
+1.  Make the hook script executable:
+    ```bash
+    chmod +x pre-push-hook.sh
+    ```
+2.  Copy the script into your local `.git/hooks` directory:
+    ```bash
+    cp pre-push-hook.sh .git/hooks/pre-push
+    ```
+
+Now, before you can push any changes, Git will automatically execute this script. If any tests fail, the push will be aborted, prompting you to fix the issues first.
 
 ## Using `theMule_atomic_hitl` as a Library
 

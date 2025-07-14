@@ -137,7 +137,15 @@ class ResponseEvaluator:
             "raw_manual_scores": manual_scores # Store the input scores
         }
 
-        print(f"Overall Weighted Score: {total_weighted_score:.2f} / {sum(c['weight'] * 5 for c in self.criteria.values() if manual_scores.get(crit_name) is not None for crit_name in [crit for crit in self.criteria]) if manual_scores else sum(c['weight'] * 5 for c in self.criteria.values()) :.2f}")
+        # Simplified and corrected calculation for the max possible score
+        max_score = 5.0
+        if manual_scores:
+            # Only consider criteria that were actually scored
+            total_possible_weighted_score = sum(details["weight"] * max_score for crit, details in self.criteria.items() if crit in manual_scores)
+        else: # If mock scores were used, all criteria were scored
+            total_possible_weighted_score = sum(details["weight"] * max_score for details in self.criteria.values())
+
+        print(f"Overall Weighted Score: {total_weighted_score:.2f} / {total_possible_weighted_score:.2f}")
 
 
         return final_evaluation

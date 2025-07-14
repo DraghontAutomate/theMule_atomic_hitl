@@ -3,7 +3,7 @@
 import sys
 from typing import Dict, Any, Optional, Union
 
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMainWindow
 
 from .config import Config
 from .runner import run_application # Assuming run_application is in runner.py
