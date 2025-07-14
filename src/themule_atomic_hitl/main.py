@@ -7,9 +7,12 @@ from typing import Dict, Any
 
 # It's good practice to set up logging at the very beginning.
 # This will catch logs from all imported modules.
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    stream=sys.stdout)
+try:
+    from .logging_config import setup_logging
+except ImportError:
+    from logging_config import setup_logging
+
+setup_logging()
 
 # Now, import your application-specific modules
 try:
@@ -32,7 +35,7 @@ def _load_json_file(path: str) -> Dict[str, Any]:
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Error loading JSON from {path}: {e}")
+        logging.error(f"Error loading JSON from {path}: {e}")
         return {}
 
 def main():
@@ -75,7 +78,7 @@ def main():
         initial_app_data = _load_json_file(args.data)
 
     if not initial_app_data:
-        print("Warning: No initial data file provided or file is empty. Using minimal default data.")
+        logging.warning("No initial data file provided or file is empty. Using minimal default data.")
         # Use main_editor_modified_field from config to structure default data
         m_field = app_config.main_editor_modified_field
         o_field = app_config.main_editor_original_field
@@ -87,25 +90,25 @@ def main():
 
     # --- Application Mode Selection ---
     if args.no_frontend:
-        print("Starting in Terminal Mode...")
+        logging.info("Starting in Terminal Mode...")
         # This function will be created in the next step
         # final_data = run_terminal_interface(initial_app_data, app_config)
-        # print("\n--- Terminal session finished ---")
+        # logging.info("\n--- Terminal session finished ---")
         # if final_data:
-        #     print(json.dumps(final_data, indent=2))
-        print("Terminal interface is not yet implemented.")
+        #     logging.info(json.dumps(final_data, indent=2))
+        logging.warning("Terminal interface is not yet implemented.")
 
     else:
-        print("Starting in GUI Mode...")
+        logging.info("Starting in GUI Mode...")
         # We need to get the config as a dictionary for the runner
         config_dict = app_config.get_config()
         # The run_application function from runner.py will handle the GUI
         final_data = run_application(initial_app_data, config_dict, qt_app=None)
 
-        print("\n--- GUI session finished ---")
+        logging.info("\n--- GUI session finished ---")
         if final_data:
-            print("Final data returned:")
-            print(json.dumps(final_data, indent=2))
+            logging.info("Final data returned:")
+            logging.info(json.dumps(final_data, indent=2))
 
 if __name__ == '__main__':
     main()

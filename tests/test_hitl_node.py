@@ -129,10 +129,10 @@ class TestHitlNodeRun(unittest.TestCase):
         self.assertEqual(kwargs['initial_data_param'], expected_data)
 
     def test_invalid_content_type(self):
-        with patch('builtins.print') as mock_print:
+        with patch('logging.error') as mock_logging_error:
             result = hitl_node_run(content_to_review=12345)
             self.assertIsNone(result)
-            mock_print.assert_any_call("Error: content_to_review must be a string or a dictionary.")
+            mock_logging_error.assert_any_call("content_to_review must be a string or a dictionary.")
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application')
     def test_run_with_existing_qt_app(self, mock_run_application):
@@ -155,10 +155,10 @@ class TestHitlNodeRun(unittest.TestCase):
 
     @patch('src.themule_atomic_hitl.hitl_node.run_application', side_effect=Exception("Test Exception from run_app"))
     def test_exception_in_run_application(self, mock_run_application):
-        with patch('builtins.print') as mock_print:
+        with patch('logging.error') as mock_logging_error:
             result = hitl_node_run(content_to_review="test")
             self.assertIsNone(result)
-            mock_print.assert_any_call("Error in hitl_node_run: Test Exception from run_app")
+            mock_logging_error.assert_any_call("Error in hitl_node_run: Test Exception from run_app", exc_info=True)
 
 
 if __name__ == '__main__':
