@@ -107,6 +107,67 @@ Here's a breakdown of how the modules interact, primarily based on import statem
 ## Visual Representation (Textual Hierarchy)
 
 ```
+(Entry Point, e.g., src/themule_atomic_hitl/main.py)
+  └── calls src.themule_atomic_hitl.runner.run_application or src.themule_atomic_hitl.terminal_interface.run_terminal_interface
+      └── src.themule_atomic_hitl.runner.py (run_application, Backend, MainWindow)
+          ├── Uses src.themule_atomic_hitl.config.Config
+          ├── Instantiates Backend
+          │   └── Instantiates src.themule_atomic_hitl.core.SurgicalEditorLogic
+          │       ├── Uses src.themule_atomic_hitl.config.Config
+          │       └── Instantiates src.themule_atomic_hitl.llm_service.LLMService
+          │           └── (Interacts with LLM APIs: Google, OpenAI-compatible)
+          ├── Loads src.themule_atomic_hitl.frontend/index.html
+          │   └── Loads src.themule_atomic_hitl.frontend/frontend.js
+          └── (PyQt5 components for UI and WebChannel)
+      └── src.themule_atomic_hitl.terminal_interface.py (run_terminal_interface, TerminalInterface)
+          ├── Uses src.themule_atomic_hitl.config.Config
+          └── Instantiates src.themule_atomic_hitl.core.SurgicalEditorLogic
+              ├── Uses src.themule_atomic_hitl.config.Config
+              └── Instantiates src.themule_atomic_hitl.llm_service.LLMService
+                  └── (Interacts with LLM APIs: Google, OpenAI-compatible)
+
+src.themule_atomic_hitl.__init__.py
+  ├── Imports from .runner
+  └── Imports from .hitl_node
+```
+
+This textual representation should give a good overview of the module relationships and data flow within the repository.
+
+**4. `src/llm_prompt_tool/` (LLM Prompt Refinement Tool)**
+
+*   **`main_loop.py`** (Main Orchestrator)
+    *   Imports:
+        *   `.llm_tester.LLMInterface`
+        *   `.evaluator.ResponseEvaluator`
+    *   Purpose: Runs the main prompt refinement loop.
+*   **`llm_tester.py`** (LLM Interface)
+    *   Imports: None
+    *   Purpose: Provides a mock or real interface to an LLM.
+*   **`evaluator.py`** (Response Evaluator)
+    *   Imports: None
+    *   Purpose: Evaluates LLM responses based on defined criteria.
+
+## High-Level Flow
+
+1.  An external script (like `examples/run_tool.py`) or application calls `hitl_node_run` from `hitl_node.py`.
+2.  `hitl_node.py` initializes `Config` (from `config.py`) and prepares data.
+3.  `hitl_node.py` calls `run_application` from `runner.py`.
+4.  `runner.py`:
+    *   Sets up the `QApplication`.
+    *   Creates `MainWindow` which hosts `QWebEngineView`.
+    *   Instantiates `Backend`. The `Backend` initializes `SurgicalEditorLogic` (from `core.py`).
+    *   `SurgicalEditorLogic` initializes `LLMService` (from `llm_service.py`) if LLM features are configured.
+    *   `Backend` sets up the `QWebChannel` to communicate with `frontend.js`.
+    *   Loads `frontend/index.html` into the `QWebEngineView`.
+5.  `frontend/index.html` and `frontend/frontend.js` render the UI and communicate with `Backend` for actions and data updates.
+6.  `Backend` delegates calls to `SurgicalEditorLogic`, which performs operations (potentially using `LLMService`) and uses callbacks to update `Backend`.
+7.  `Backend` emits signals that `frontend.js` listens to, updating the UI.
+
+The `llm_prompt_tool` is a separate utility and does not interact with the `themule_atomic_hitl` package.
+
+## Visual Representation (Textual Hierarchy)
+
+```
 (Entry Point, e.g., examples/run_tool.py)
   └── calls src.themule_atomic_hitl.hitl_node_run
       └── src.themule_atomic_hitl.hitl_node.py (hitl_node_run)
@@ -126,6 +187,11 @@ Here's a breakdown of how the modules interact, primarily based on import statem
 src.themule_atomic_hitl.__init__.py
   ├── Imports from .runner
   └── Imports from .hitl_node
+
+(Entry Point, e.g., src/llm_prompt_tool/main_loop.py)
+  └── src.llm_prompt_tool.main_loop.py
+      ├── Uses src.llm_prompt_tool.llm_tester.LLMInterface
+      └── Uses src.llm_prompt_tool.evaluator.ResponseEvaluator
 ```
 
 This textual representation should give a good overview of the module relationships and data flow within the repository.

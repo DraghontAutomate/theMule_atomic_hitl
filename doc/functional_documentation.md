@@ -144,4 +144,44 @@ This document provides a functional overview of the modules within the `themule_
     *   **Data Submission**: Collects data from UI fields (e.g., text from input boxes, selected options) and sends it to the Python backend when actions are triggered.
 
 This documentation should provide a clear understanding of each module's role and how they contribute to the overall functionality of TheMule Atomic HITL tool.
+
+## `llm_prompt_tool` Modules (`src/llm_prompt_tool/`)
+
+### 1. `evaluator.py`
+*   **Purpose**: To evaluate the quality of LLM responses based on a configurable set of criteria.
+*   **Key Class**: `ResponseEvaluator`
+*   **Functionality**:
+    *   **Criteria-Based Evaluation**: Evaluates LLM responses against criteria like relevance, coherence, accuracy, and completeness. Each criterion has a description, weight, and a scoring guide.
+    *   **Score Calculation**: Calculates a weighted score for each response.
+    *   **Prompt Improvement Suggestions**: Suggests improvements to system and user prompts based on the evaluation scores.
+
+### 2. `llm_tester.py`
+*   **Purpose**: To provide an interface for interacting with an LLM, with support for both mock and real models.
+*   **Key Class**: `LLMInterface`
+*   **Functionality**:
+    *   **Mock LLM**: Includes a mock LLM that returns pre-defined responses with simulated latency, for testing without API keys.
+    *   **Real LLM Integration**: Contains placeholder code for integrating with actual LLM APIs (e.g., OpenAI, Anthropic).
+    *   **Interaction Logging**: Logs all interactions with the LLM, including prompts, responses, and timestamps.
+
+### 3. `main_loop.py`
+*   **Purpose**: To orchestrate the prompt refinement process.
+*   **Functionality**:
+    *   **Refinement Cycles**: Runs a series of refinement cycles, where it gets a response from the LLM, evaluates it, and then refines the prompt for the next iteration.
+    *   **Configuration**: Allows configuration of the initial prompts, number of iterations, and LLM model to use.
+    *   **Results Logging**: Saves the results of the refinement process to a JSONL file.
+
+## `main.py`
+*   **Purpose**: Serves as the main entry point for the application.
+*   **Functionality**:
+    *   **Command-line Argument Parsing**: Parses command-line arguments to determine the application's mode (GUI or terminal) and to load custom configuration and initial data files.
+    *   **Configuration and Data Loading**: Initializes the `Config` object and loads initial data from specified files.
+    *   **Application Launch**: Launches either the GUI or terminal interface based on the parsed arguments.
+
+## `terminal_interface.py`
+*   **Purpose**: Provides a terminal-based interface for the Surgical Editor.
+*   **Key Class**: `TerminalInterface`
+*   **Functionality**:
+    *   **User Interaction**: Handles user interaction in the terminal, including displaying menus, receiving input, and showing information from the core logic.
+    *   **Core Logic Integration**: Instantiates and interacts with the `SurgicalEditorLogic` class, providing terminal-specific callbacks for UI updates.
+    *   **Main Loop**: Runs a main loop to handle user input and display information when the core logic is idle.
 ```

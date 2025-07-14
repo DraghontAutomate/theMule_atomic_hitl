@@ -121,5 +121,58 @@ class TestLLMPromptTool(unittest.TestCase):
         self.assertEqual(user_prompt, new_user, "User prompt should not change for high scores.")
 
 
+    # --- Tests for main_loop.py ---
+
+    @patch('llm_prompt_tool.main_loop.LLMInterface')
+    @patch('llm_prompt_tool.main_loop.ResponseEvaluator')
+    def test_run_refinement_cycle_single_iteration(self, mock_evaluator, mock_llm_interface):
+        """Tests a single iteration of the refinement cycle, including prompt, evaluation, and decision to exit."""
+        # --- Setup Mocks ---
+        mock_llm_instance = mock_llm_interface.return_value
+        def mock_get_response(sys_prompt, user_prompt):
+            interaction_log.append({
+                "system_prompt": sys_prompt,
+                "user_prompt": user_prompt,
+                "llm_response": "Mocked LLM response.",
+                "model_name": "mock-model",
+                "timestamp": time.time(),
+                "evaluation": None
+            })
+            return "Mocked LLM response."
+        mock_llm_instance.get_response.side_effect = mock_get_response
+
+        mock_evaluator_instance = mock_evaluator.return_value
+        mock_evaluation_result = {
+            "overall_score": 3.5,
+            "criteria_scores": {"relevance": {"score": 5}, "coherence": {"score": 4}, "accuracy": {"score": 3}, "completeness": {"score": 2}},
+            "feedback": "Mock feedback."
+        }
+        mock_evaluator_instance.evaluate_response.return_value = mock_evaluation_result
+        # Make suggest_prompt_improvements return the same prompts to avoid complexity
+        mock_evaluator_instance.suggest_prompt_improvements.side_effect = lambda sys_prompt, usr_prompt, eval_res: (sys_prompt, usr_prompt)
+
+        # --- Run the function under test ---
+        initial_sys_prompt = "Initial system prompt."
+        initial_user_prompt = "Test user prompt."
+        run_refinement_cycle(mock_llm_instance, mock_evaluator_instance, initial_sys_prompt, initial_user_prompt, 0, 1)
+
+        # --- Assertions ---
+        # 1. LLM was called with the correct prompts
+        mock_llm_instance.get_response.assert_called_once_with(initial_sys_prompt, initial_user_prompt)
+
+        # 2. Evaluator was called to evaluate the response
+        mock_evaluator_instance.evaluate_response.assert_called_once()
+        eval_args, eval_kwargs = mock_evaluator_instance.evaluate_response.call_args
+        self.assertEqual(eval_args[0], initial_user_prompt)
+        self.assertEqual(eval_args[1], 'Mocked LLM response.')
+        self.assertIn('relevance', eval_kwargs['manual_scores'])
+
+        # 3. Interaction log was updated with the evaluation
+        self.assertEqual(len(interaction_log), 1, "Interaction log should have one entry.")
+        self.assertEqual(interaction_log[0]['evaluation'], mock_evaluation_result, "Evaluation result not logged correctly.")
+
+        # 4. Prompt improvement suggestion was attempted
+        mock_evaluator_instance.suggest_prompt_improvements.assert_called_once()
+
 if __name__ == '__main__':
     unittest.main()

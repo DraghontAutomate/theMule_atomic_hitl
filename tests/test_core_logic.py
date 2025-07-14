@@ -11,6 +11,9 @@ import unittest
 from unittest.mock import MagicMock
 import json
 import re
+import tempfile
+import shutil
+
 
 # We need the actual LLMService for spec'ing the mock
 from src.themule_atomic_hitl.llm_service import LLMService
@@ -70,7 +73,10 @@ class TestSurgicalEditorLogic(unittest.TestCase):
                 "system_prompts": {"locator": "mock_locator_prompt", "editor": "mock_editor_prompt"}
             }
         }
-        self.temp_config_file_path = "temp_test_core_config.json"
+
+        self.test_dir = tempfile.mkdtemp()
+        self.temp_config_file_path = os.path.join(self.test_dir, "temp_test_core_config.json")
+
         with open(self.temp_config_file_path, 'w') as f:
             json.dump(self.sample_config_dict, f)
 
@@ -107,8 +113,7 @@ class TestSurgicalEditorLogic(unittest.TestCase):
 
     def tearDown(self):
         """Clean up after each test."""
-        if os.path.exists(self.temp_config_file_path):
-            os.remove(self.temp_config_file_path)
+        shutil.rmtree(self.test_dir)
 
     def test_01_initialization(self):
         """Tests the initial state of the SurgicalEditorLogic after instantiation."""
@@ -171,8 +176,13 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         current_hint_for_retry = self.editor_logic.active_edit_task['user_hint']
         self.editor_logic.update_active_task_and_retry(current_hint_for_retry, "make it bold")
 
-        # --- 4. System re-processes and asks for diff approval again ---
+        # --- 4. System re-processes, user confirms location again, and new diff is shown ---
         self.assertEqual(self.mock_callbacks['confirm_location_details'].call_count, 2, "Location confirmation should be called a second time for the retry.")
+        # Simulate the second location confirmation
+        loc_args_2, _ = self.mock_callbacks['confirm_location_details'].call_args
+        self.editor_logic.proceed_with_edit_after_location_confirmation(loc_args_2[0], loc_args_2[2])
+
+
         self.assertEqual(self.mock_callbacks['show_diff_preview'].call_count, 2, "Diff preview should be shown a second time for the retry.")
         diff_args_2, _ = self.mock_callbacks['show_diff_preview'].call_args
         self.assertEqual(diff_args_2[1], "EDITED based on 'make it bold': [CONTENT]", "The edited snippet for the retry is incorrect.")

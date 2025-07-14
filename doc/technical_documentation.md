@@ -277,4 +277,88 @@ Provides a high-level library interface to the HITL tool.
     *   **State Management (Minimal)**: Primarily reflects state from Python backend. May hold temporary UI state (e.g., which task is being confirmed).
 
 This technical documentation provides a deeper dive into the implementation details of the TheMule Atomic HITL tool.
+
+## Sequence Diagrams
+
+*   [TheMule Atomic HITL Sequence Diagram](./themule_atomic_hitl_sequence_diagram.md)
+*   [LLM Prompt Tool Sequence Diagram](./llm_prompt_tool_sequence_diagram.md)
+
+## `src/llm_prompt_tool/evaluator.py`
+
+### Class: `ResponseEvaluator`
+*   **Purpose**: To evaluate LLM responses based on a set of criteria.
+*   **Initialization (`__init__(self, criteria=None)`)**:
+    *   Takes an optional `criteria` dictionary; otherwise, it uses `DEFAULT_CRITERIA`.
+    *   Normalizes the weights of the criteria to ensure they sum to 1.0.
+*   **Key Methods**:
+    *   `evaluate_response(self, prompt_text: str, response_text: str, manual_scores: dict = None) -> dict`:
+        *   Evaluates a response against the configured criteria.
+        *   If `manual_scores` are provided, it uses them; otherwise, it uses mock scores.
+        *   Returns a dictionary with the overall score and a breakdown of scores for each criterion.
+    *   `suggest_prompt_improvements(self, system_prompt: str, user_prompt: str, evaluation: dict) -> tuple[str, str]`:
+        *   Suggests improvements to the system and user prompts based on the evaluation scores.
+        *   The suggestions are based on a set of heuristics.
+
+## `src/llm_prompt_tool/llm_tester.py`
+
+### Class: `LLMInterface`
+*   **Purpose**: To provide an interface to an LLM.
+*   **Initialization (`__init__(self, api_key=None, model_name="mock-model")`)**:
+    *   Takes an optional `api_key` and `model_name`.
+    *   If `model_name` is `"mock-model"`, it uses a mock LLM; otherwise, it would initialize a real LLM client.
+*   **Key Methods**:
+    *   `get_response(self, system_prompt: str, user_prompt: str) -> str`:
+        *   Gets a response from the LLM.
+        *   If using the mock LLM, it returns a random response from a predefined list.
+        *   It also logs the interaction.
+    *   `get_interaction_log(self) -> list`:
+        *   Returns the log of all interactions.
+
+## `src/llm_prompt_tool/main_loop.py`
+
+### Function: `run_refinement_cycle(llm_interface: LLMInterface, evaluator: ResponseEvaluator, current_system_prompt: str, current_user_prompt: str, iteration: int, num_total_iterations: int) -> tuple[str, str, dict]`
+*   **Purpose**: To run a single refinement cycle.
+*   **Logic**:
+    1.  Gets a response from the LLM.
+    2.  Evaluates the response.
+    3.  Suggests improvements to the prompts.
+    4.  Logs the cycle.
+*   **Returns**: The new system prompt, the new user prompt, and the cycle log.
+
+### Function: `main(args)`
+*   **Purpose**: The main function of the script.
+*   **Logic**:
+    1.  Initializes the `LLMInterface` and `ResponseEvaluator`.
+    2.  Loops through the initial user prompts.
+    3.  For each prompt, it runs a series of refinement cycles.
+    4.  Saves the results to a file.
+
+## `src/themule_atomic_hitl/main.py`
+
+### Function: `main()`
+*   **Purpose**: The main entry point for the application.
+*   **Logic**:
+    1.  Parses command-line arguments (`--no-frontend`, `--config`, `--data`).
+    2.  Initializes the `Config` object.
+    3.  Loads initial data from a file or uses a default.
+    4.  If `--no-frontend` is specified, it runs the terminal interface; otherwise, it runs the GUI application.
+
+## `src/themule_atomic_hitl/terminal_interface.py`
+
+### Class: `TerminalInterface`
+*   **Purpose**: To provide a terminal-based interface for the Surgical Editor.
+*   **Initialization (`__init__(self, initial_data: Dict[str, Any], config: Config)`)**:
+    *   Initializes the `SurgicalEditorLogic` with terminal-specific callbacks.
+*   **Key Methods**:
+    *   `run(self) -> Dict[str, Any]`: Starts the main loop for the terminal interface.
+    *   `display_main_menu(self)`: Displays the main menu of options.
+    *   `handle_new_edit_request(self)`: Handles the creation of a new edit request.
+    *   `on_update_view(self, data: Dict[str, Any], config_dict: Dict[str, Any], queue_info: Dict[str, Any])`: Callback to update the view.
+    *   `on_show_diff_preview(self, original_snippet: str, edited_snippet: str, before_context: str, after_context: str)`: Callback to show a diff preview.
+    *   `on_request_clarification(self)`: Callback to request clarification.
+    *   `on_show_error(self, msg: str)`: Callback to display an error message.
+    *   `on_confirm_location_details(self, location_info: dict, original_hint: str, original_instruction: str)`: Callback to confirm a located snippet.
+
+### Function: `run_terminal_interface(initial_data: Dict[str, Any], config: Config) -> Dict[str, Any]`
+*   **Purpose**: Sets up and runs the terminal-based interface.
 ```
