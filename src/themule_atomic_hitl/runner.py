@@ -108,7 +108,7 @@ class Backend(QObject):
 
     # Signal to prompt the user to confirm the location of a snippet found by the locator
 
-    promptUserToConfirmLocationSignal = pyqtSignal(object, str, str, name="promptUserToConfirmLocation") # dict -> object
+    promptUserToConfirmLocationSignal = pyqtSignal(str, str, str, name="promptUserToConfirmLocation")
 
     # Signal to indicate session termination, so the calling function can retrieve data
     sessionTerminatedSignal = pyqtSignal()
@@ -174,7 +174,7 @@ class Backend(QObject):
         Callback executed by SurgicalEditorLogic when a snippet has been located.
         Emits promptUserToConfirmLocationSignal to JS.
         """
-        self.promptUserToConfirmLocationSignal.emit(location_info, original_hint, original_instruction)
+        self.promptUserToConfirmLocationSignal.emit(json.dumps(location_info), original_hint, original_instruction)
 
     # --- Slots called by JavaScript UI to drive the Core Logic (SurgicalEditorLogic) ---
 

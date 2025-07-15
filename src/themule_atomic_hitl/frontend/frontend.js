@@ -590,7 +590,9 @@ require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
     }
 
     if (app.api && app.api.promptUserToConfirmLocationSignal) {
-        app.api.promptUserToConfirmLocationSignal.connect((location_info, original_hint, original_instruction) => {
+        app.api.promptUserToConfirmLocationSignal.connect((location_info_json, original_hint, original_instruction) => {
+            const location_info = JSON.parse(location_info_json); // <-- Add this parsing line
+
             console.log("JS: promptUserToConfirmLocationSignal received.", {location_info, original_hint, original_instruction});
             app.activeTaskDetails = { location_info, original_hint, user_instruction: original_instruction, status: 'awaiting_location_confirmation' };
             if (app.ui.originalHintDisplay) app.ui.originalHintDisplay.textContent = original_hint;
