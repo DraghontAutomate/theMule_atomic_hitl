@@ -416,6 +416,7 @@ class MainWindow(QMainWindow):
 
 
         # Load the HTML file into the web view
+        logger.debug("PY TRACE (A): MainWindow is about to load frontend.html. Handing off to web engine.")
         self.view.setUrl(QUrl.fromLocalFile(html_path))
         self.setCentralWidget(self.view) # Make the web view the main content of the window
 

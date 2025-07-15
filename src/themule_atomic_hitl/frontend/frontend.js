@@ -1,6 +1,8 @@
+console.log("JS TRACE (1): Script execution started.");
 console.log("frontend.js starting");
 // Configure the AMD loader for Monaco editor.
 // This tells the loader where to find the editor's source files.
+console.log("JS TRACE (2): Configuring Monaco loader path.");
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } });
 
 /**
@@ -540,7 +542,9 @@ function updateSelectionContextStatus() {
 }
 
 // --- Main Execution Block ---
+console.log("JS TRACE (3): Triggering main Monaco script load.");
 require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
+  console.log("JS TRACE (4): Monaco script has loaded, AMD callback is running.");
   console.log("JS: Monaco editor loaded via require. Checking for qt object before QWebChannel setup...");
   if (typeof qt !== 'undefined' && qt.webChannelTransport) {
     console.log("JS: qt object and qt.webChannelTransport found. Proceeding with QWebChannel.");
@@ -694,7 +698,9 @@ require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
     }
 
     if (app.api && app.api.getInitialPayload) {
+        console.log("JS TRACE (5): QWebChannel is set up. About to request initial payload from Python.");
         app.api.getInitialPayload().then(response_str => {
+          console.log("JS TRACE (6): Received response from getInitialPayload. About to parse and render.");
           console.log("JS: Initial response from getInitialPayload (string):", response_str);
           try {
             const payload = JSON.parse(response_str);
