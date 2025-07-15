@@ -94,7 +94,7 @@ class Backend(QObject):
     """
 
     # Signal to update the entire view in JavaScript
-    updateViewSignal = pyqtSignal(object, object, object, name="updateView") # dict -> object
+    updateViewSignal = pyqtSignal(str, str, str, name="updateView")
 
     # Signal to show a diff preview in JavaScript
 
@@ -148,7 +148,7 @@ class Backend(QObject):
             config_dict: The configuration dictionary (from config_manager.get_config()).
             queue_info: Information about the task queue.
         """
-        self.updateViewSignal.emit(data, config_dict, queue_info)
+        self.updateViewSignal.emit(json.dumps(data), json.dumps(config_dict), json.dumps(queue_info))
 
 
     def on_show_diff_preview(self, original_snippet: str, edited_snippet: str, before_context: str, after_context: str):
