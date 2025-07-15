@@ -19,13 +19,42 @@ from typing import Dict, Any, Optional, Union # Optional added, Union added
 from PyQt5.QtCore import QObject, pyqtSlot, QUrl, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QMainWindow
 
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
 from PyQt5.QtWebChannel import QWebChannel
 
 from .core import SurgicalEditorLogic
 from .config import Config # Import the new Config class
 
 # Using main's _load_json_file for now as it's more robust with error handling
+
+# Get a logger for messages originating from JavaScript.
+js_logger = logging.getLogger("javascript")
+
+class JsConsoleInterceptor(QWebEnginePage):
+    """
+    A custom QWebEnginePage that intercepts messages from the JavaScript
+    console (e.g., console.log, console.error) and redirects them to
+    Python's standard logging system. This is the definitive way to
+    capture all JS logs, especially those that occur during startup.
+    """
+    def javaScriptConsoleMessage(self, level, message, lineNumber, sourceId):
+        """
+        This method is automatically called by Qt whenever a message
+        is sent to the JavaScript console.
+        """
+        # Map JS log levels to Python log levels.
+        log_level_map = {
+            QWebEnginePage.InfoMessageLevel: logging.INFO,
+            QWebEnginePage.WarningMessageLevel: logging.WARNING,
+            QWebEnginePage.ErrorMessageLevel: logging.ERROR,
+        }
+        python_level = log_level_map.get(level, logging.DEBUG)
+
+        # Format a detailed log message.
+        log_message = f"{message} (source: {sourceId}, line: {lineNumber})"
+
+        # Route the message through Python's logging system.
+        js_logger.log(python_level, log_message)
 
 def _load_json_file(path: str) -> Dict[str, Any]:
     """
@@ -343,6 +372,13 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 1200, 800)
 
         self.view = QWebEngineView()
+
+        # --- INJECT THE INTERCEPTOR ---
+        # This line is critical. It replaces the default page with our spy,
+        # ensuring it is active before any HTML or JavaScript is loaded.
+        self.view.setPage(JsConsoleInterceptor(self.view))
+        # --- END INJECTION ---
+
         self.channel = QWebChannel()
 
         # Create the Backend instance, passing the Config object
