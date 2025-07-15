@@ -12,7 +12,7 @@ def setup_logging():
         logger.removeHandler(handler)
 
     # Create a file handler that logs debug and higher level messages
-    file_handler = logging.FileHandler("app.log")
+    file_handler = logging.FileHandler("app.log" , mode='w')
     file_handler.setLevel(logging.DEBUG)
     file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
     file_handler.setFormatter(file_formatter)
