@@ -94,7 +94,7 @@ class Backend(QObject):
     """
 
     # Signal to update the entire view in JavaScript
-    updateViewSignal = pyqtSignal(object, object, object, name="updateView") # dict -> object
+    updateViewSignal = pyqtSignal(str, str, str, name="updateView")
 
     # Signal to show a diff preview in JavaScript
 
@@ -108,7 +108,7 @@ class Backend(QObject):
 
     # Signal to prompt the user to confirm the location of a snippet found by the locator
 
-    promptUserToConfirmLocationSignal = pyqtSignal(object, str, str, name="promptUserToConfirmLocation") # dict -> object
+    promptUserToConfirmLocationSignal = pyqtSignal(str, str, str, name="promptUserToConfirmLocation")
 
     # Signal to indicate session termination, so the calling function can retrieve data
     sessionTerminatedSignal = pyqtSignal()
@@ -148,7 +148,7 @@ class Backend(QObject):
             config_dict: The configuration dictionary (from config_manager.get_config()).
             queue_info: Information about the task queue.
         """
-        self.updateViewSignal.emit(data, config_dict, queue_info)
+        self.updateViewSignal.emit(json.dumps(data), json.dumps(config_dict), json.dumps(queue_info))
 
 
     def on_show_diff_preview(self, original_snippet: str, edited_snippet: str, before_context: str, after_context: str):
@@ -174,7 +174,7 @@ class Backend(QObject):
         Callback executed by SurgicalEditorLogic when a snippet has been located.
         Emits promptUserToConfirmLocationSignal to JS.
         """
-        self.promptUserToConfirmLocationSignal.emit(location_info, original_hint, original_instruction)
+        self.promptUserToConfirmLocationSignal.emit(json.dumps(location_info), original_hint, original_instruction)
 
     # --- Slots called by JavaScript UI to drive the Core Logic (SurgicalEditorLogic) ---
 
@@ -416,6 +416,7 @@ class MainWindow(QMainWindow):
 
 
         # Load the HTML file into the web view
+        logger.debug("PY TRACE (A): MainWindow is about to load frontend.html. Handing off to web engine.")
         self.view.setUrl(QUrl.fromLocalFile(html_path))
         self.setCentralWidget(self.view) # Make the web view the main content of the window
 

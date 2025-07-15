@@ -1,6 +1,8 @@
+console.log("JS TRACE (1): Script execution started.");
 console.log("frontend.js starting");
 // Configure the AMD loader for Monaco editor.
 // This tells the loader where to find the editor's source files.
+console.log("JS TRACE (2): Configuring Monaco loader path.");
 require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } });
 
 /**
@@ -540,7 +542,9 @@ function updateSelectionContextStatus() {
 }
 
 // --- Main Execution Block ---
+console.log("JS TRACE (3): Triggering main Monaco script load.");
 require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
+  console.log("JS TRACE (4): Monaco script has loaded, AMD callback is running.");
   console.log("JS: Monaco editor loaded via require. Checking for qt object before QWebChannel setup...");
   if (typeof qt !== 'undefined' && qt.webChannelTransport) {
     console.log("JS: qt object and qt.webChannelTransport found. Proceeding with QWebChannel.");
@@ -560,8 +564,12 @@ require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
       console.log("JS: Attempting to connect signals...");
 
       if (app.api && app.api.updateViewSignal) {
-          app.api.updateViewSignal.connect((data, config, queue_info) => {
-              console.log("JS: updateViewSignal received (raw data):", data, config, queue_info);
+          app.api.updateViewSignal.connect((data_json, config_json, queue_info_json) => {
+            console.log("JS: updateViewSignal received (raw JSON strings):", data_json, config_json, queue_info_json);
+            const data = JSON.parse(data_json);
+            const config = JSON.parse(config_json);
+            const queue_info = JSON.parse(queue_info_json);
+
             app.data = data;
             app.config = config;
             if (Object.keys(app.widgets).length === 0 || JSON.stringify(app.config) !== JSON.stringify(config)) { // Basic check
@@ -586,7 +594,9 @@ require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
     }
 
     if (app.api && app.api.promptUserToConfirmLocationSignal) {
-        app.api.promptUserToConfirmLocationSignal.connect((location_info, original_hint, original_instruction) => {
+        app.api.promptUserToConfirmLocationSignal.connect((location_info_json, original_hint, original_instruction) => {
+            const location_info = JSON.parse(location_info_json); // <-- Add this parsing line
+
             console.log("JS: promptUserToConfirmLocationSignal received.", {location_info, original_hint, original_instruction});
             app.activeTaskDetails = { location_info, original_hint, user_instruction: original_instruction, status: 'awaiting_location_confirmation' };
             if (app.ui.originalHintDisplay) app.ui.originalHintDisplay.textContent = original_hint;
@@ -688,7 +698,9 @@ require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
     }
 
     if (app.api && app.api.getInitialPayload) {
+        console.log("JS TRACE (5): QWebChannel is set up. About to request initial payload from Python.");
         app.api.getInitialPayload().then(response_str => {
+          console.log("JS TRACE (6): Received response from getInitialPayload. About to parse and render.");
           console.log("JS: Initial response from getInitialPayload (string):", response_str);
           try {
             const payload = JSON.parse(response_str);
