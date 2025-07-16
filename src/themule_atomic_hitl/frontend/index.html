@@ -182,9 +182,6 @@
   <!-- Qt WebChannel script: Essential for communication between JavaScript and the Python backend (PyQt5) -->
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 
-  <!-- Monaco Editor Loader script: Used to load the Monaco editor (powerful code editor from VS Code) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
-
   <!-- Additional styles specifically for the HITL (Human-in-the-Loop) UI elements -->
   <style>
     .hidden { display: none !important; } /* Utility class to hide elements */
@@ -290,6 +287,20 @@
   </div>
 
   <!-- Main JavaScript file for frontend logic -->
-  <script src="frontend.js"></script>
+  <script type="module">
+    (() => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', './frontend.js', true);              // ← async!
+        xhr.overrideMimeType('text/javascript');          // ensure the right MIME
+        xhr.onload = () => {
+        const blob = new Blob([xhr.responseText], {
+            type: 'application/javascript'
+        });
+        const url = URL.createObjectURL(blob);
+        import(url);
+        };
+        xhr.send();
+    })();
+    </script>
 </body>
 </html>

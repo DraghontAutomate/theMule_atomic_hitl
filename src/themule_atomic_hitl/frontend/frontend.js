@@ -1,3 +1,5 @@
+import loader from 'https://cdn.jsdelivr.net/npm/@monaco-editor/loader@1.4.0/+esm';
+
 // Log that the script execution has started.
 console.log("JS TRACE (1): Script execution started.");
 // Log that the frontend.js script is starting.
@@ -6,7 +8,6 @@ console.log("frontend.js starting");
 // This tells the loader where to find the editor's source files.
 // Log that the Monaco loader path is being configured.
 console.log("JS TRACE (2): Configuring Monaco loader path.");
-require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } });
 
 /**
  * Main application state object.
@@ -766,7 +767,7 @@ function updateSelectionContextStatus() {
 // Log that the main Monaco script is being loaded.
 console.log("JS TRACE (3): Triggering main Monaco script load.");
 // Load the main Monaco editor script.
-require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
+loader.init().then(monaco => { // Monaco loader uncommented
   // Log that the Monaco script has loaded and the callback is running.
   console.log("JS TRACE (4): Monaco script has loaded, AMD callback is running.");
   // Log that the Monaco editor has been loaded and check for the qt object.
@@ -1072,7 +1073,7 @@ require(['vs/editor/editor.main'], () => { // Monaco loader uncommented
     // Display an error message in the queue status display.
     if(document.getElementById('queue-status-display')) document.getElementById('queue-status-display').textContent = "Error: Frontend-Backend communication disabled.";
 }
-}); // Monaco loader uncommented
+});
 
 /**
  * Updates the global UI state based on whether the backend is processing a task.
