@@ -23,6 +23,46 @@
             "llm": "local",
             "system_prompt": "You are a helpful assistant.",
             "user_prompt": "What is the meaning of life?"
+        },
+        {
+            "name": "bare_google_schema_test",
+            "llm": "google",
+            "system_prompt": "Extract the person's name and address from the following text.",
+            "user_prompt": "John Doe lives at 123 Main St, Anytown, USA.",
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "person": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "address": {"type": "string"}
+                        },
+                        "required": ["name", "address"]
+                    }
+                },
+                "required": ["person"]
+            }
+        },
+        {
+            "name": "bare_local_schema_test",
+            "llm": "local",
+            "system_prompt": "Extract the book title and author from the following text.",
+            "user_prompt": "The Hitchhiker's Guide to the Galaxy is a comedy science fiction series created by Douglas Adams.",
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "book": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "author": {"type": "string"}
+                        },
+                        "required": ["title", "author"]
+                    }
+                },
+                "required": ["book"]
+            }
         }
     ]
 }

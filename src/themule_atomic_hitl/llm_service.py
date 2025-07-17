@@ -127,7 +127,14 @@ class LLMService:
         if not llm:
             raise RuntimeError(f"Could not get an LLM for task '{task_name}'. Check initialization and config.")
 
-        system_prompt = system_prompt_override or self.config.get("system_prompts", {}).get(task_name)
+        if system_prompt_override:
+            system_prompt = system_prompt_override
+        else:
+            # We need a Config object to resolve potential file paths for prompts
+            from .config import Config
+            config_obj = Config(custom_config_dict=self.config)
+            system_prompt = config_obj.get_system_prompt(task_name)
+
         if not system_prompt:
             system_prompt = "You are a helpful AI assistant."
             print(f"Warning: No system prompt found for task '{task_name}'. Using a generic prompt.")

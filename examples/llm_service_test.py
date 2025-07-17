@@ -34,12 +34,23 @@ def run_bare_api_test(llm_service, test_config):
         # For bare API calls, we can invent a temporary task name or use a default
         # The key is to override the system prompt.
         task_name = "bare_test"
+
+        # Check if an output schema is defined for this test
+        output_schema = test_config.get("output_schema")
+        if output_schema:
+            # If a schema is present, we need to add it to the llm_service's config temporarily
+            llm_service.config["output_schemas"][task_name] = output_schema
+
         response = llm_service.invoke_llm(
             task_name,
             test_config["user_prompt"],
-            system_prompt_override=test_config["system_prompt"]
+            system_prompt_override=test_config["system_prompt"],
         )
         print(f"LLM Response:\n{response}")
+
+        # Clean up the temporary schema
+        if output_schema:
+            del llm_service.config["output_schemas"][task_name]
 
     except Exception as e:
         print(f"An error occurred: {e}")
