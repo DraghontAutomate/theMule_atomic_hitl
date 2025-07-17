@@ -1,9 +1,11 @@
 import os
-from typing import Optional, Dict, Any, List, Union, Callable # Added typing imports
+from typing import Optional, Dict, Any, List, Union, Callable, Type # Added typing imports
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI # Corrected import for newer Langchain versions
 import yaml
+from pydantic import BaseModel, create_model
+from jsonschema_pydantic import jsonschema_to_pydantic
 
 # --- Load environment variables ---
 load_dotenv()
@@ -12,22 +14,16 @@ load_dotenv()
 # typically from the main Config object of the application.
 
 class LLMService:
-    def __init__(self, llm_config: dict):
+    def __init__(self, llm_config: Dict[str, Any]):
         """
         Initializes the LLMService with configuration.
         Args:
-            llm_config (dict): A dictionary containing LLM provider settings,
-                               task-to-LLM mappings, and system prompts.
-                               Expected structure:
-                               {
-                                   "providers": { "google": {...}, "local": {...} },
-                                   "task_llms": { "locator": "google", ... },
-                                   "system_prompts": { "locator": "prompt text", ... }
-                               }
+            llm_config (Dict[str, Any]): A dictionary containing LLM provider settings,
+                                         task-to-LLM mappings, system prompts, and output schemas.
         """
         self.google_llm = None
         self.local_llm = None
-        self.config = llm_config # Store the passed config
+        self.config = llm_config
 
         if not self.config:
             raise ValueError("LLM configuration is required for LLMService.")
@@ -112,52 +108,49 @@ class LLMService:
 
         raise RuntimeError("No LLM could be initialized or selected. Please check your configuration and API keys.")
 
-    def invoke_llm(self, task_name: str, user_prompt: str, system_prompt_override: Optional[str] = None) -> str:
+    def invoke_llm(self, task_name: str, user_prompt: str, system_prompt_override: Optional[str] = None, strict: bool = False) -> Union[str, Dict[str, Any]]:
         """
         Invokes the appropriate LLM for the given task with the specified prompts.
         The system prompt is retrieved from the configuration unless overridden.
+        If an output schema is defined for the task, the LLM is invoked with structured output.
 
         Args:
-            task_name (str): The name of the task (e.g., "locator", "editor") to determine LLM
-                             and the default system prompt.
+            task_name (str): The name of the task (e.g., "locator", "editor").
             user_prompt (str): The user's input/query for the LLM.
-            system_prompt_override (Optional[str]): An optional system prompt to use instead of the
-                                                     one defined in the config for this task.
+            system_prompt_override (Optional[str]): An optional system prompt to use instead of the one from the config.
+            strict (bool): If True, forces the LLM to use the specified schema.
 
         Returns:
-            str: The content of the LLM's response.
-
-        Raises:
-            RuntimeError: If no suitable LLM is available or system prompt is missing.
+            Union[str, Dict[str, Any]]: The LLM's response, either as a raw string or a parsed Pydantic model dictionary.
         """
         llm = self.get_llm_for_task(task_name)
         if not llm:
             raise RuntimeError(f"Could not get an LLM for task '{task_name}'. Check initialization and config.")
 
-        system_prompt = system_prompt_override
+        system_prompt = system_prompt_override or self.config.get("system_prompts", {}).get(task_name)
         if not system_prompt:
-            system_prompts_config = self.config.get("system_prompts", {})
-            system_prompt = system_prompts_config.get(task_name)
-
-        if not system_prompt:
-            # Fallback to a generic system prompt if a task-specific one is not found and not overridden
             system_prompt = "You are a helpful AI assistant."
-            print(f"Warning: No system prompt found for task '{task_name}' in config and no override provided. Using a generic prompt.")
+            print(f"Warning: No system prompt found for task '{task_name}'. Using a generic prompt.")
 
         from langchain_core.messages import SystemMessage, HumanMessage
+        messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
 
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ]
+        output_schema_def = self.config.get("output_schemas", {}).get(task_name)
 
         try:
-            # print(f"Invoking LLM for task '{task_name}' with system prompt: '{system_prompt[:100]}...' and user prompt: '{user_prompt[:100]}...'")
-            response = llm.invoke(messages)
-            return response.content
+            if output_schema_def:
+                # Dynamically create a Pydantic model from the schema definition
+                pydantic_model = jsonschema_to_pydantic(output_schema_def, "StructuredOutputModel")
+                structured_llm = llm.with_structured_output(pydantic_model, strict=strict)
+                response = structured_llm.invoke(messages)
+                return response.dict()
+            else:
+                response = llm.invoke(messages)
+                return response.content
         except Exception as e:
             print(f"Error during LLM invocation for task '{task_name}': {e}")
             raise
+
 
 # Example usage (for testing purposes, will be removed or moved later)
 # To run this, you'd need to have the Config class from config.py available

@@ -49,6 +49,27 @@ DEFAULT_CONFIG = {
         "system_prompts": { # Define system prompts here
             "locator": "You are an expert in identifying specific UI elements in a given HTML or text structure. Respond concisely with the identified element or location.",
             "editor": "You are an AI assistant that helps modify text or code snippets. Respond only with the modified content. If no changes are needed, return the original content."
+        },
+        "output_schemas": {
+            "locator": {
+                "description": "A list of locations of the found elements.",
+                "type": "object",
+                "properties": {
+                    "locations": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["locations"]
+            },
+            "editor": {
+                "description": "The edited text.",
+                "type": "object",
+                "properties": {
+                    "edited_text": {"type": "string"}
+                },
+                "required": ["edited_text"]
+            }
         }
     }
 }
@@ -132,9 +153,14 @@ class Config:
         return self._config.get("llm_config", default_llm_cfg)
 
     def get_system_prompt(self, task_name: str) -> Optional[str]:
-        """Retrieves the system prompt for a given LLM task."""
+        """Retrievels the system prompt for a given LLM task."""
         llm_conf = self.get_llm_config()
         return llm_conf.get("system_prompts", {}).get(task_name)
+
+    def get_output_schema(self, task_name: str) -> Optional[Dict[str, Any]]:
+        """Retrieves the output schema for a given LLM task."""
+        llm_conf = self.get_llm_config()
+        return llm_conf.get("output_schemas", {}).get(task_name)
 
     @property
     def main_editor_original_field(self) -> str:

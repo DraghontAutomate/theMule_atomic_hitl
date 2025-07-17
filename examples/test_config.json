@@ -45,6 +45,27 @@
         "system_prompts": {
             "locator": "You are an HTML expert. Your task is to locate the specified element in the provided HTML document. Respond with the element's path.",
             "editor": "You are a skilled code editor. Your task is to modify the given code snippet as instructed. Respond with the modified code."
+        },
+        "output_schemas": {
+            "locator": {
+                "description": "A list of locations of the found elements.",
+                "type": "object",
+                "properties": {
+                    "locations": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["locations"]
+            },
+            "editor": {
+                "description": "The edited text.",
+                "type": "object",
+                "properties": {
+                    "edited_text": {"type": "string"}
+                },
+                "required": ["edited_text"]
+            }
         }
     }
 }
