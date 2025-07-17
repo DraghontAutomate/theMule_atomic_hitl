@@ -93,6 +93,8 @@ class Backend(QObject):
                                  or data retrieval by a calling library.
     """
 
+    showLlmDisabledWarningSignal = pyqtSignal(name="showLlmDisabledWarning")
+
     # Signal to update the entire view in JavaScript
     updateViewSignal = pyqtSignal(str, str, str, name="updateView")
 
@@ -133,10 +135,17 @@ class Backend(QObject):
             'request_clarification': self.on_request_clarification,
             'show_error': self.on_show_error,
             'confirm_location_details': self.on_confirm_location_details,
+            'show_llm_disabled_warning': self.on_show_llm_disabled_warning,
         }
 
         # Instantiate the core logic engine, passing the Config object
         self.logic = SurgicalEditorLogic(initial_data, self.config_manager, logic_callbacks)
+
+    def on_show_llm_disabled_warning(self):
+        """
+        Callback executed by SurgicalEditorLogic. Emits showLlmDisabledWarningSignal to JS.
+        """
+        self.showLlmDisabledWarningSignal.emit()
 
     # --- Methods called by Core Logic (SurgicalEditorLogic) to signal the UI via this Backend ---
 

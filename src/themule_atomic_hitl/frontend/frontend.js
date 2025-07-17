@@ -999,6 +999,24 @@ loader.init().then(monaco => { // Monaco loader uncommented
         console.error("JS Error: Python 'showErrorSignal' not found.");
     }
 
+    if (app.api && app.api.showLlmDisabledWarningSignal) {
+        app.api.showLlmDisabledWarningSignal.connect(() => {
+            console.log("JS: showLlmDisabledWarningSignal received.");
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'llm-disabled-warning';
+            warningDiv.innerHTML = '<strong>LLM features are not available.</strong> No LLM provider is configured. You can still review and approve the content, but you cannot request new edits.';
+            const mainBody = document.getElementById('mainbody-container');
+            if (mainBody) {
+                mainBody.prepend(warningDiv);
+            }
+            if (app.ui.btnRequestNewEdit) {
+                app.ui.btnRequestNewEdit.style.display = 'none';
+            }
+        });
+    } else if (app.api) {
+        console.error("JS Error: Python 'showLlmDisabledWarningSignal' not found.");
+    }
+
     // If the getInitialPayload method exists,
     if (app.api && app.api.getInitialPayload) {
         // log that the QWebChannel is set up and the initial payload is being requested.

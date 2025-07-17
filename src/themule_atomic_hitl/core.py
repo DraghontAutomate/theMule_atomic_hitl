@@ -95,6 +95,8 @@ class SurgicalEditorLogic:
                 self.callbacks['show_error'](f"LLMService init failed: {e}. LLM features disabled.")
                 self.llm_service = None # Ensure it's None if init fails
 
+        self.llm_enabled = self.llm_service is not None
+
         # Ensure initial data has the necessary fields if they are missing
         if self.main_text_field not in self.data:
             self.data[self.main_text_field] = "" # Initialize if not present
@@ -160,6 +162,8 @@ class SurgicalEditorLogic:
 
 
         self._notify_view_update()
+        if not self.llm_enabled:
+            self.callbacks['show_llm_disabled_warning']()
         self._process_next_edit_request()
 
     def _notify_view_update(self):
