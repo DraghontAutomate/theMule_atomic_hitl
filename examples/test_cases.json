@@ -1,0 +1,28 @@
+{
+    "task_based_tests": [
+        {
+            "name": "locator_test",
+            "task_name": "locator",
+            "user_prompt": "Find the button in this HTML: <div><button>Click Me</button></div>"
+        },
+        {
+            "name": "editor_test",
+            "task_name": "editor",
+            "user_prompt": "In the following code, change the variable 'x' to 'y': `let x = 10;`"
+        }
+    ],
+    "bare_api_tests": [
+        {
+            "name": "bare_google_test",
+            "llm": "google",
+            "system_prompt": "You are a helpful assistant.",
+            "user_prompt": "What is the airspeed velocity of an unladen swallow?"
+        },
+        {
+            "name": "bare_local_test",
+            "llm": "local",
+            "system_prompt": "You are a helpful assistant.",
+            "user_prompt": "What is the meaning of life?"
+        }
+    ]
+}
