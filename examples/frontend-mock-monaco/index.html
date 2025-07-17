@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Monaco Editor Mock</title>
+    <style>
+        #editor-container {
+            width: 800px;
+            height: 600px;
+            border: 1px solid grey;
+        }
+    </style>
+</head>
+<body>
+    <div id="editor-container"></div>
+    <button id="test-button">Test</button>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <script type="module">
+    (() => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', './main.js', true);              // ← async!
+        xhr.overrideMimeType('text/javascript');          // ensure the right MIME
+        xhr.onload = () => {
+        const blob = new Blob([xhr.responseText], {
+            type: 'application/javascript'
+        });
+        const url = URL.createObjectURL(blob);
+        import(url);
+        };
+        xhr.send();
+    })();
+    </script>
+</body>
+</html>

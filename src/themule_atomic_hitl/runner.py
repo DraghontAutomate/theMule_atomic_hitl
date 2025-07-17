@@ -93,22 +93,24 @@ class Backend(QObject):
                                  or data retrieval by a calling library.
     """
 
+    showLlmDisabledWarningSignal = pyqtSignal()
+
     # Signal to update the entire view in JavaScript
-    updateViewSignal = pyqtSignal(str, str, str, name="updateView")
+    updateViewSignal = pyqtSignal(str, str, str)
 
     # Signal to show a diff preview in JavaScript
 
-    showDiffPreviewSignal = pyqtSignal(str, str, str, str, name="showDiffPreview")
+    showDiffPreviewSignal = pyqtSignal(str, str, str, str)
 
     # Signal to request clarification from the user for an active LLM task
-    requestClarificationSignal = pyqtSignal(name="requestClarification")
+    requestClarificationSignal = pyqtSignal()
 
     # Signal to show an error message in JavaScript
-    showErrorSignal = pyqtSignal(str, name="showError")
+    showErrorSignal = pyqtSignal(str)
 
     # Signal to prompt the user to confirm the location of a snippet found by the locator
 
-    promptUserToConfirmLocationSignal = pyqtSignal(str, str, str, name="promptUserToConfirmLocation")
+    promptUserToConfirmLocationSignal = pyqtSignal(str, str, str)
 
     # Signal to indicate session termination, so the calling function can retrieve data
     sessionTerminatedSignal = pyqtSignal()
@@ -133,10 +135,17 @@ class Backend(QObject):
             'request_clarification': self.on_request_clarification,
             'show_error': self.on_show_error,
             'confirm_location_details': self.on_confirm_location_details,
+            'show_llm_disabled_warning': self.on_show_llm_disabled_warning,
         }
 
         # Instantiate the core logic engine, passing the Config object
         self.logic = SurgicalEditorLogic(initial_data, self.config_manager, logic_callbacks)
+
+    def on_show_llm_disabled_warning(self):
+        """
+        Callback executed by SurgicalEditorLogic. Emits showLlmDisabledWarningSignal to JS.
+        """
+        self.showLlmDisabledWarningSignal.emit()
 
     # --- Methods called by Core Logic (SurgicalEditorLogic) to signal the UI via this Backend ---
 
