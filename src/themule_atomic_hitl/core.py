@@ -339,6 +339,8 @@ class SurgicalEditorLogic:
             self.active_edit_task['status'] = 'location_failed'
             # _llm_locator calls show_error if it fails internally
             self._notify_view_update()
+            self.active_edit_task = None
+            self._process_next_edit_request()
             return
 
         self.active_edit_task['location_info'] = location # Contains {'snippet', 'start_idx', 'end_idx'}
