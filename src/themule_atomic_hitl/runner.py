@@ -93,24 +93,24 @@ class Backend(QObject):
                                  or data retrieval by a calling library.
     """
 
-    showLlmDisabledWarningSignal = pyqtSignal(name="showLlmDisabledWarning")
+    showLlmDisabledWarningSignal = pyqtSignal()
 
     # Signal to update the entire view in JavaScript
-    updateViewSignal = pyqtSignal(str, str, str, name="updateView")
+    updateViewSignal = pyqtSignal(str, str, str)
 
     # Signal to show a diff preview in JavaScript
 
-    showDiffPreviewSignal = pyqtSignal(str, str, str, str, name="showDiffPreview")
+    showDiffPreviewSignal = pyqtSignal(str, str, str, str)
 
     # Signal to request clarification from the user for an active LLM task
-    requestClarificationSignal = pyqtSignal(name="requestClarification")
+    requestClarificationSignal = pyqtSignal()
 
     # Signal to show an error message in JavaScript
-    showErrorSignal = pyqtSignal(str, name="showError")
+    showErrorSignal = pyqtSignal(str)
 
     # Signal to prompt the user to confirm the location of a snippet found by the locator
 
-    promptUserToConfirmLocationSignal = pyqtSignal(str, str, str, name="promptUserToConfirmLocation")
+    promptUserToConfirmLocationSignal = pyqtSignal(str, str, str)
 
     # Signal to indicate session termination, so the calling function can retrieve data
     sessionTerminatedSignal = pyqtSignal()
