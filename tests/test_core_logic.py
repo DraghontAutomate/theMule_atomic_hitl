@@ -91,11 +91,14 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         # --- Direct instance mocking of LLMService ---
         self.editor_logic.llm_service = MagicMock(spec=LLMService)
 
-        def default_mock_invoke_llm_side_effect(task_name, user_prompt):
+        def default_mock_invoke_llm_side_effect(task_name, user_prompt, **kwargs):
             if task_name == "locator":
                 hint_match = re.search(r"hint: '([^']*)'", user_prompt)
                 hint = hint_match.group(1) if hint_match else "UNKNOWN_HINT"
-                return hint
+                # The real locator now returns a dict with a "snippets" key.
+                # The test was failing because it expected a raw string.
+                # The mock must now replicate the structured output.
+                return {"snippets": [hint]}
             elif task_name == "editor":
                 snippet_match = re.search(r"Original Snippet:\n---\n(.*?)\n---", user_prompt, re.DOTALL)
                 snippet_to_edit = snippet_match.group(1).strip() if snippet_match else "UNKNOWN_SNIPPET"
@@ -155,6 +158,42 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         expected_content = "This is the EDITED based on 'make it uppercase': [INITIAL DOCUMENT] content."
         self.assertEqual(self.editor_logic.current_main_content, expected_content, "Main content was not updated correctly after approval.")
         self.assertTrue(self.mock_callbacks['update_view'].called, "View should be updated after approval.")
+
+    def test_02a_add_edit_request_selection_specific(self):
+        """Tests the lifecycle of a selection-specific edit request."""
+        # --- 1. Define selection and instruction ---
+        selection_details = {
+            "text": "initial document",
+            "startLineNumber": 1, "startColumn": 13,
+            "endLineNumber": 1, "endColumn": 29
+        }
+        instruction = "capitalize this selection"
+
+        # --- 2. Add selection-specific request ---
+        self.editor_logic.add_edit_request(
+            instruction=instruction,
+            request_type="selection_specific",
+            selection_details=selection_details
+        )
+
+        # --- 3. Verify it bypasses locator and goes straight to diff preview ---
+        self.assertEqual(len(self.editor_logic.edit_request_queue), 0, "Queue should be empty as the task is active.")
+        self.assertIsNotNone(self.editor_logic.active_edit_task, "A task should be active.")
+        # Ensure locator confirmation was NOT called for selection-based tasks
+        self.mock_callbacks['confirm_location_details'].assert_not_called()
+        self.assertEqual(self.editor_logic.active_edit_task['status'], "awaiting_diff_approval", "Task should go directly to awaiting diff approval.")
+        self.mock_callbacks['show_diff_preview'].assert_called_once()
+        diff_args, _ = self.mock_callbacks['show_diff_preview'].call_args
+        original_snippet, edited_snippet, _, _ = diff_args
+        self.assertEqual(original_snippet, "initial document", "Original snippet in diff is incorrect for selection.")
+        self.assertEqual(edited_snippet, "EDITED based on 'capitalize this selection': [INITIAL DOCUMENT]", "Edited snippet in diff is incorrect for selection.")
+
+        # --- 4. Approve the edit ---
+        self.editor_logic.process_llm_task_decision('approve')
+        self.assertIsNone(self.editor_logic.active_edit_task, "Active task should be cleared after approval.")
+        expected_content = "This is the EDITED based on 'capitalize this selection': [INITIAL DOCUMENT] content."
+        self.assertEqual(self.editor_logic.current_main_content, expected_content, "Main content was not updated correctly after selection approval.")
+        self.assertTrue(self.mock_callbacks['update_view'].called, "View should be updated after selection approval.")
 
     @unittest.skip("Skipping due to subtle bug in retry logic state where show_diff_preview is not called a second time.")
     def test_03_process_reject_clarify_then_approve(self):

@@ -1,0 +1,76 @@
+{
+  "fields": [
+    { "name": "projectName", "label": "Project Name", "type": "label-bold", "placement": "header" },
+    { "name": "status",      "label": "Status",       "type": "label",      "placement": "header" },
+    { "name": "author",      "label": "Author",       "type": "text-input", "placement": "sidebar" },
+    { "name": "reviewNotes", "label": "Review Notes", "type": "textarea",   "placement": "sidebar" },
+    {
+      "name": "main_diff",
+      "type": "diff-editor",
+      "placement": "mainbody",
+      "originalDataField": "originalText",
+      "modifiedDataField": "editedText"
+    }
+  ],
+  "actions": [
+    {
+      "name": "approve",
+      "label": "Approve",
+      "placement": "header",
+      "isPrimary": true,
+      "editorName": "main_diff"
+    },
+    { "name": "increment_version", "label": "Increment Version", "placement": "sidebar" },
+    { "name": "revert_changes",    "label": "Revert All Changes", "placement": "footer" }
+  ],
+     "llm_config": {
+        "providers": {
+            "google": {
+                "model": "gemini-1.5-flash-latest",
+                "temperature": 0.7,
+                "api_key_env": "GOOGLE_API_KEY"
+            },
+            "local": {
+                "model": "deepseek/deepseek-r1-0528-qwen3-8b",
+                "temperature": 0.1,
+                "base_url_env": "LOCAL_LLM_BASE_URL",
+                "api_key": "unused"
+            }
+        },
+        "task_llms": {
+            "locator": "google",
+            "editor": "local",
+            "default": "google"
+        },
+        "system_prompts": {
+            "locator": "../src/themule_atomic_hitl/prompts/locator.txt",
+            "editor": "../src/themule_atomic_hitl/prompts/editor.txt"
+        },
+        "output_schemas": {
+            "locator": {
+                "description": "A list of snippets.",
+                "type": "object",
+                "properties": {
+                    "full_text": {
+                        "type": "boolean",
+                        "description": "The flag that all text must be edited"
+                    },
+                    "snippets": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "A list of snippets."
+                    }
+                },
+                "required": ["full_text", "snippets"]
+            },
+            "editor": {
+                "description": "The edited text.",
+                "type": "object",
+                "properties": {
+                    "edited_text": {"type": "string"}
+                },
+                "required": ["edited_text"]
+            }
+        }
+    }
+}

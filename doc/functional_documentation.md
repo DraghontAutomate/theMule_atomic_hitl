@@ -16,12 +16,13 @@ This document provides a functional overview of the modules within the `themule_
 *   **Purpose**: Manages all configuration settings for the HITL application.
 *   **Key Class**: `Config`
 *   **Functionality**:
-    *   **Default Configuration**: Defines a `DEFAULT_CONFIG` dictionary containing fallback settings for UI elements (fields, actions), window appearance, and LLM provider details (models, API keys, system prompts).
+    *   **Default Configuration**: Defines a `DEFAULT_CONFIG` dictionary containing fallback settings for UI elements, window appearance, and a detailed `llm_config` section.
+    *   **LLM Configuration**: The `llm_config` section specifies providers (like Google and local OpenAI-compatible servers), maps tasks (`locator`, `editor`) to specific LLMs, and defines paths to prompt files and JSON schemas for structured output.
     *   **Custom Configuration**:
         *   Can load custom settings from a user-provided JSON file.
         *   Can accept custom settings as a Python dictionary.
     *   **Merging**: Merges custom configurations with the default configuration. For dictionaries (like `settings` or `llm_config`), it performs a deep merge. For lists (like `fields` and `actions`), the custom configuration completely overrides the default.
-    *   **Accessors**: Provides methods to retrieve the entire configuration (`get_config()`), specific field configurations (`get_field_config()`), action configurations (`get_action_config()`), LLM configurations (`get_llm_config()`), and system prompts (`get_system_prompt()`).
+    *   **Accessors**: Provides methods to retrieve the entire configuration (`get_config()`), specific UI configurations (`get_field_config()`, `get_action_config()`), LLM configurations (`get_llm_config()`), system prompts from files (`get_system_prompt()`), and output schemas (`get_output_schema()`).
     *   **Properties**: Offers convenient properties like `main_editor_original_field`, `main_editor_modified_field`, and `window_title` to easily access commonly needed configuration values.
 
 ### 3. `core.py`
@@ -30,13 +31,13 @@ This document provides a functional overview of the modules within the `themule_
 *   **Functionality**:
     *   **State Management**: Holds the current data being edited (`self.data`) and an initial snapshot for revert functionality.
     *   **Two-Loop Editing Process**:
-        *   **Gatekeeper Loop**: User provides a hint and instruction. The system (via `LLMService`) locates the relevant text snippet. The user is then asked to confirm or correct this location.
-        *   **Worker Loop**: Once the location is confirmed, the system (via `LLMService`) generates an edited version of the snippet based on the user's instruction. The user reviews a diff, can manually edit the suggestion, approve it, or reject it.
-    *   **Edit Request Queue**: Manages a `deque` of pending edit requests. Each request includes the user's hint, instruction, and a snapshot of the main content at the time the request was made (to ensure edits are based on the correct context).
+        *   **Gatekeeper Loop**: For `hint_based` requests, the user provides a hint and instruction. The system (via `LLMService`) locates the relevant text snippet. The user is then asked to confirm or correct this location. For `selection_specific` requests, this loop is bypassed as the location is already defined.
+        *   **Worker Loop**: Once the location is confirmed (or predefined), the system (via `LLMService`) generates an edited version of the snippet based on the user's instruction. The user reviews a diff, can manually edit the suggestion, approve it, or reject it.
+    *   **Edit Request Queue**: Manages a `deque` of pending edit requests. Each request is a dictionary containing the user's instruction, a request type (`hint_based` or `selection_specific`), a content snapshot, and either a `hint` string or `selection_details`.
     *   **Active Edit Task**: Tracks the currently processed edit task, including its status (e.g., `locating_snippet`, `awaiting_location_confirmation`, `awaiting_diff_approval`).
     *   **LLM Interaction**:
         *   Uses `LLMService` to perform:
-            *   **Snippet Location**: (`_llm_locator`) Based on user hint and content snapshot.
+            *   **Snippet Location**: (`_llm_locator`) Based on user hint and content snapshot, expecting a structured JSON output.
             *   **Snippet Editing**: (`_llm_editor`) Based on user instruction and the located snippet.
     *   **Callbacks**: Communicates with a frontend (via the `Backend` in `runner.py`) through a dictionary of callback functions. These callbacks are used to:
         *   Update the UI view (`update_view`).
@@ -44,12 +45,13 @@ This document provides a functional overview of the modules within the `themule_
         *   Request user confirmation for located snippets (`confirm_location_details`).
         *   Display diff previews (`show_diff_preview`).
         *   Ask for clarification if an edit is rejected (`request_clarification`).
+        *   Warn if the LLM service is disabled (`show_llm_disabled_warning`).
     *   **Action Handling**:
-        *   `add_edit_request()`: Adds a new task to the queue.
+        *   `add_edit_request()`: Adds a new task to the queue based on request type.
         *   `proceed_with_edit_after_location_confirmation()`: Moves from location confirmation to generating the edit.
-        *   `process_llm_task_decision()`: Handles user decisions (approve, reject, cancel) on LLM-generated edits.
+        *   `process_llm_task_decision()`: Handles user decisions (approve, reject, cancel) on LLM-generated edits. It correctly applies changes to the main content based on character offsets derived from either the locator or the initial selection.
         *   `update_active_task_and_retry()`: Allows retrying a task with new hints/instructions after a rejection.
-        *   `perform_action()`: Handles generic UI actions (e.g., "approve main content," "revert changes") by dispatching to specific `handle_...` methods.
+        *   `perform_action()`: Handles generic UI actions (e.g., "approve_main_content," "revert_changes") by dispatching to specific `handle_...` methods.
     *   **Data Integrity**: Aims to apply edits atomically and manages the content state throughout the session.
 
 ### 4. `hitl_node.py`
@@ -73,16 +75,17 @@ This document provides a functional overview of the modules within the `themule_
 *   **Purpose**: Encapsulates all interactions with Large Language Models (LLMs).
 *   **Key Class**: `LLMService`
 *   **Functionality**:
-    *   **Configuration-Driven**: Initialized with an `llm_config` dictionary (typically from the main `Config` object), which specifies provider details, API keys (via environment variables), model names, and default system prompts for different tasks.
+    *   **Configuration-Driven**: Initialized with an `llm_config` dictionary (from the main `Config` object), which specifies provider details, API keys, model names, and prompt configurations.
     *   **Provider Support**:
         *   **Google**: Supports Google's Generative AI models (e.g., Gemini) via `ChatGoogleGenerativeAI` from `langchain_google_genai`.
         *   **Local (OpenAI-compatible)**: Supports LLMs served via an OpenAI-compatible API (e.g., Ollama, VLLM) using `ChatOpenAI` from `langchain_openai`.
     *   **LLM Initialization**: (`_initialize_llms`) Sets up LLM client instances based on the provided configuration and environment variables (for API keys and base URLs).
-    *   **Task-Based LLM Selection**: (`get_llm_for_task`) Selects the appropriate LLM instance (Google or local) based on the `task_name` (e.g., "locator", "editor") as defined in the `task_llms` section of the configuration. Includes fallback to a default LLM.
+    *   **Task-Based LLM Selection**: (`get_llm_for_task`) Selects the appropriate LLM instance (Google or local) based on the `task_name` (e.g., "locator", "editor") as defined in the `task_llms` section of the configuration. Includes robust fallback to a default LLM.
+    *   **Structured Output**: Uses `jsonschema_to_pydantic` to dynamically create Pydantic models from schemas defined in the configuration. It then uses the `with_structured_output` method from LangChain to ensure the LLM's response conforms to the desired JSON structure.
     *   **Invocation**: (`invoke_llm`)
         *   Constructs messages (system prompt + user prompt) for the LLM.
-        *   Retrieves the system prompt from the configuration based on `task_name` or uses an optional `system_prompt_override`. Falls back to a generic system prompt if none is found.
-        *   Sends the request to the selected LLM and returns its content response as a string.
+        *   Retrieves the system prompt from the configuration based on `task_name` or uses an optional `system_prompt_override`.
+        *   If a schema is defined for the task, it invokes the LLM requesting structured output and returns a dictionary. Otherwise, it returns a raw string.
     *   **Environment Variables**: Uses `dotenv` to load API keys and other sensitive information from a `.env` file.
 
 ### 6. `runner.py`
@@ -170,18 +173,32 @@ This documentation should provide a clear understanding of each module's role an
     *   **Configuration**: Allows configuration of the initial prompts, number of iterations, and LLM model to use.
     *   **Results Logging**: Saves the results of the refinement process to a JSONL file.
 
-## `main.py`
+## `terminal_main.py`
 *   **Purpose**: Serves as the main entry point for the application.
 *   **Functionality**:
-    *   **Command-line Argument Parsing**: Parses command-line arguments to determine the application's mode (GUI or terminal) and to load custom configuration and initial data files.
-    *   **Configuration and Data Loading**: Initializes the `Config` object and loads initial data from specified files.
-    *   **Application Launch**: Launches either the GUI or terminal interface based on the parsed arguments.
+    *   **Command-line Argument Parsing**: Uses `argparse` to handle command-line arguments:
+        *   `--no-frontend`: Runs the application in a (currently not implemented) terminal mode.
+        *   `--config`: Specifies a path to a custom JSON configuration file.
+        *   `--data`: Specifies a path to an initial data file (JSON or plain text).
+    *   **Configuration and Data Loading**: Initializes the `Config` object and loads initial data from the specified files, with sensible defaults.
+    *   **Logging**: Sets up application-wide logging using the configuration from `logging_config.py`.
+    *   **Application Launch**:
+        *   If `--no-frontend` is **not** used, it calls `hitl_node.hitl_node_run` to launch the GUI application.
+        *   If `--no-frontend` is used, it logs that the terminal interface is not yet implemented.
 
 ## `terminal_interface.py`
-*   **Purpose**: Provides a terminal-based interface for the Surgical Editor.
+*   **Purpose**: Provides a terminal-based interface for the Surgical Editor. (Note: As of the latest updates, the implementation of this interface is not complete).
 *   **Key Class**: `TerminalInterface`
 *   **Functionality**:
-    *   **User Interaction**: Handles user interaction in the terminal, including displaying menus, receiving input, and showing information from the core logic.
+    *   **User Interaction**: Designed to handle user interaction in the terminal, including displaying menus, receiving input, and showing information from the core logic.
     *   **Core Logic Integration**: Instantiates and interacts with the `SurgicalEditorLogic` class, providing terminal-specific callbacks for UI updates.
-    *   **Main Loop**: Runs a main loop to handle user input and display information when the core logic is idle.
+    *   **Main Loop**: Would run a main loop to handle user input and display information when the core logic is idle.
+
+## `logging_config.py`
+*   **Purpose**: Centralizes the logging configuration for the entire application.
+*   **Functionality**:
+    *   **`setup_logging()`**: A function that configures the root logger.
+    *   **File Handler**: Sets up a `FileHandler` to log all messages (DEBUG level and above) to an `app.log` file, including detailed information like timestamp, level, and file location.
+    *   **Stream Handler**: Sets up a `StreamHandler` to log messages to the console (INFO level and above) with a simpler format.
+    *   This setup ensures that logs are captured in a file for debugging while providing a clean, informative output to the user in the console.
 ```

@@ -1,0 +1,68 @@
+{
+    "task_based_tests": [
+        {
+            "name": "locator_test",
+            "task_name": "locator",
+            "user_prompt": "Source Text: 'The quick brown fox jumps over the lazy dog. The lazy dog slept in the sun.'\nPosition Hint: 'second sentence'\nModification Directive: 'make it more active'"
+        },
+        {
+            "name": "editor_test",
+            "task_name": "editor",
+            "user_prompt": "Text Snippet: 'Our platform delivers industry‑leading speed and stability. It handles high volumes of data without breaking a sweat.'\nDirective: 'Make it more empathetic.'"
+        }
+    ],
+    "bare_api_tests": [
+        {
+            "name": "bare_google_test",
+            "llm": "google",
+            "system_prompt": "You are a helpful assistant.",
+            "user_prompt": "What is the airspeed velocity of an unladen swallow?"
+        },
+        {
+            "name": "bare_local_test",
+            "llm": "local",
+            "system_prompt": "You are a helpful assistant.",
+            "user_prompt": "What is the meaning of life?"
+        },
+        {
+            "name": "bare_google_schema_test",
+            "llm": "google",
+            "system_prompt": "Extract the person's name and address from the following text.",
+            "user_prompt": "John Doe lives at 123 Main St, Anytown, USA.",
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "person": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "address": {"type": "string"}
+                        },
+                        "required": ["name", "address"]
+                    }
+                },
+                "required": ["person"]
+            }
+        },
+        {
+            "name": "bare_local_schema_test",
+            "llm": "local",
+            "system_prompt": "Extract the book title and author from the following text.",
+            "user_prompt": "The Hitchhiker's Guide to the Galaxy is a comedy science fiction series created by Douglas Adams.",
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "book": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "author": {"type": "string"}
+                        },
+                        "required": ["title", "author"]
+                    }
+                },
+                "required": ["book"]
+            }
+        }
+    ]
+}

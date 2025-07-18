@@ -7,3 +7,4 @@ PyYAML
 # langchain (core) is usually a dependency of the specific provider packages,
 # but it can be added explicitly if specific versions are needed.
 # For now, relying on transitive dependencies.
+jsonschema-pydantic

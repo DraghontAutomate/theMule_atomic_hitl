@@ -46,9 +46,35 @@ DEFAULT_CONFIG = {
             "editor": "google",  # Default to google for editor
             "default": "google" # Default LLM if task-specific not set or provider fails
         },
-        "system_prompts": { # Define system prompts here
-            "locator": "You are an expert in identifying specific UI elements in a given HTML or text structure. Respond concisely with the identified element or location.",
-            "editor": "You are an AI assistant that helps modify text or code snippets. Respond only with the modified content. If no changes are needed, return the original content."
+        "system_prompts": {
+            "locator": "prompts/locator.txt",
+            "editor": "prompts/editor.txt"
+        },
+        "output_schemas": {
+            "locator": {
+                "description": "A list of snippets.",
+                "type": "object",
+                "properties": {
+                    "full_text": {
+                        "type": "boolean",
+                        "description": "The flag that all text must be edited"
+                    },
+                    "snippets": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "A list of snippets."
+                    }
+                },
+                "required": ["full_text", "snippets"]
+            },
+            "editor": {
+                "description": "The edited text.",
+                "type": "object",
+                "properties": {
+                    "edited_text": {"type": "string"}
+                },
+                "required": ["edited_text"]
+            }
         }
     }
 }
@@ -134,7 +160,27 @@ class Config:
     def get_system_prompt(self, task_name: str) -> Optional[str]:
         """Retrieves the system prompt for a given LLM task."""
         llm_conf = self.get_llm_config()
-        return llm_conf.get("system_prompts", {}).get(task_name)
+        prompt_or_path = llm_conf.get("system_prompts", {}).get(task_name)
+
+        if prompt_or_path and isinstance(prompt_or_path, str) and prompt_or_path.endswith(".txt"):
+            try:
+                # Assuming the path is relative to the config file's location is a robust approach
+                # For simplicity here, let's assume it's relative to the package root or a known 'prompts' dir
+                # This might need to be more robust depending on deployment.
+                base_dir = os.path.dirname(__file__)
+                file_path = os.path.join(base_dir, prompt_or_path)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            except FileNotFoundError:
+                print(f"Warning: Prompt file not found at {file_path}. Returning the path itself as prompt.")
+                return prompt_or_path # Fallback to returning the path
+
+        return prompt_or_path
+
+    def get_output_schema(self, task_name: str) -> Optional[Dict[str, Any]]:
+        """Retrieves the output schema for a given LLM task."""
+        llm_conf = self.get_llm_config()
+        return llm_conf.get("output_schemas", {}).get(task_name)
 
     @property
     def main_editor_original_field(self) -> str:

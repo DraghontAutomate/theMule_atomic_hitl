@@ -339,6 +339,8 @@ class SurgicalEditorLogic:
             self.active_edit_task['status'] = 'location_failed'
             # _llm_locator calls show_error if it fails internally
             self._notify_view_update()
+            self.active_edit_task = None
+            self._process_next_edit_request()
             return
 
         self.active_edit_task['location_info'] = location # Contains {'snippet', 'start_idx', 'end_idx'}
@@ -419,8 +421,15 @@ class SurgicalEditorLogic:
             return
 
         # Basic validation of the confirmed location details from UI
-        if not (isinstance(confirmed_location_details, dict) and 'snippet' in confirmed_location_details and
-                'start_idx' in confirmed_location_details and 'end_idx' in confirmed_location_details):
+        is_valid = False
+        if isinstance(confirmed_location_details, dict) and 'snippet' in confirmed_location_details:
+            if confirmed_location_details.get('is_selection_based'):
+                if all(k in confirmed_location_details for k in ['start_line', 'start_col', 'end_line', 'end_col']):
+                    is_valid = True
+            elif all(k in confirmed_location_details for k in ['start_idx', 'end_idx']):
+                is_valid = True
+
+        if not is_valid:
             self.callbacks['show_error']("Invalid confirmed_location_details structure provided by UI.")
             self.active_edit_task['status'] = 'error_in_location_confirmation'
             self._notify_view_update()
@@ -746,17 +755,19 @@ class SurgicalEditorLogic:
         try:
             # The system prompt for "locator" is defined in config and fetched by LLMService
             # The user prompt for the locator task is the 'hint'.
-            # We expect the LLM to return the *exact text of the snippet*.
-            located_snippet_text = self.llm_service.invoke_llm(
+            # We expect the LLM to return a dictionary with a "snippets" key.
+            response = self.llm_service.invoke_llm(
                 task_name="locator",
-                user_prompt=f"Given the following text:\n\n---\n{text_to_search}\n---\n\nIdentify and return the exact text snippet that matches the hint: '{hint}'. Respond only with the identified snippet text and nothing else."
+                user_prompt=f"Given the following text:\n\n---\n{text_to_search}\n---\n\nIdentify and return the exact text snippet that matches the location hint: '{hint}'. Your response must comply with imposed output schema."
             )
 
-            if not located_snippet_text or not located_snippet_text.strip():
-                self.callbacks['show_error'](f"LLM locator returned an empty response for hint: '{hint}'")
+            if not response or "snippets" not in response or not response["snippets"]:
+                self.callbacks['show_error'](f"LLM locator returned an invalid response for hint: '{hint}'")
                 return None
 
-            located_snippet_text = located_snippet_text.strip()
+            # For now, we only handle the first snippet returned by the LLM.
+            # A future improvement would be to allow the user to choose from multiple snippets.
+            located_snippet_text = response["snippets"][0].strip()
 
             # Now, find this located_snippet_text within the original text_to_search
             # This assumes the LLM returns a substring that exists in text_to_search.

@@ -1,0 +1,53 @@
+# Test Documentation
+
+This document provides a summary of the tests in the `tests` directory.
+
+## `tests/test_config.py`
+
+This file contains tests for the `Config` class, which is responsible for managing the application's configuration.
+
+*   `test_load_default_config`: Verifies that the `Config` class loads the default configuration correctly when no custom path is provided.
+*   `test_load_custom_config`: Verifies that the `Config` class correctly loads and merges a custom configuration file.
+*   `test_merge_settings_deeply`: Tests that settings are deeply merged, not overwritten, when a partial custom config is used.
+*   `test_non_existent_custom_config`: Verifies that the `Config` class loads default settings if a non-existent custom config path is given.
+*   `test_get_field_config`: Test retrieval of specific field configurations by name from both custom and default configs.
+*   `test_get_action_config`: Test retrieval of specific action configurations by name from both custom and default configs.
+*   `test_main_editor_fields_fallback`: Test that main editor field names fallback to defaults if no diff-editor is configured.
+
+## `tests/test_core_logic.py`
+
+This file contains unit tests for the `SurgicalEditorLogic` class, which is the core of the application.
+
+*   `test_01_initialization`: Tests the initial state of the `SurgicalEditorLogic` after instantiation.
+*   `test_02_add_edit_request_and_process_approve`: Tests the full lifecycle of a hint-based edit request from creation to approval.
+*   `test_02a_add_edit_request_selection_specific`: Tests the lifecycle of a selection-specific edit request.
+*   `test_03_process_reject_clarify_then_approve`: Tests the reject and clarification workflow.
+*   `test_04_process_cancel_task_after_location_confirm`: Tests cancelling a task after the diff is shown.
+*   `test_05_queue_multiple_requests`: Tests that multiple edit requests are queued and processed sequentially.
+*   `test_06_generic_action_increment_version`: Tests the 'increment_version' generic action.
+*   `test_07_generic_action_revert_changes`: Tests that 'revert_changes' generic action reverts data to its initial state.
+
+## `tests/test_hitl_node.py`
+
+This file contains tests for the `hitl_node_run` function, which is the entry point for the application.
+
+*   `test_run_with_string_content_default_config`: Tests running the application with string content and the default configuration.
+*   `test_run_with_dict_content_default_config`: Tests running the application with a dictionary as content and the default configuration.
+*   `test_run_with_string_content_custom_config`: Tests running the application with string content and a custom configuration.
+*   `test_run_with_dict_content_missing_fields`: Tests running the application with a dictionary that is missing some fields.
+*   `test_invalid_content_type`: Tests that the application handles invalid content types gracefully.
+*   `test_run_with_existing_qt_app`: Tests running the application with an existing Qt application instance.
+*   `test_exception_in_run_application`: Tests that the application handles exceptions in the `run_application` function.
+
+## `tests/test_llm_prompt_tool.py`
+
+This file contains tests for a command-line tool for testing LLM prompts.
+
+*   `test_llm_interface_init_mock`: Tests that `LLMInterface` initializes in mock mode by default.
+*   `test_llm_interface_get_response_mock`: Tests that the mock `LLMInterface` returns a response and logs the interaction.
+*   `test_evaluator_weight_normalization`: Tests that `ResponseEvaluator` normalizes weights that do not sum to 1.
+*   `test_evaluate_response_with_manual_scores`: Tests the evaluator's scoring logic with provided manual scores.
+*   `test_evaluate_response_mock_scores`: Tests the evaluator's fallback to mock scoring when no manual scores are given.
+*   `test_suggest_improvements_low_score`: Tests that prompt improvements are suggested for low-scoring evaluations.
+*   `test_suggest_improvements_high_score`: Tests that no prompt improvements are suggested for high-scoring evaluations.
+*   `test_run_refinement_cycle_single_iteration`: Tests a single iteration of the refinement cycle, including prompt, evaluation, and decision to exit.

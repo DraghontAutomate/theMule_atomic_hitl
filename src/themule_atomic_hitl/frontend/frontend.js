@@ -849,12 +849,12 @@ loader.init().then(monaco => { // Monaco loader uncommented
         // connect to it.
         app.api.promptUserToConfirmLocationSignal.connect((location_info_json, original_hint, original_instruction) => {
             // Parse the location info.
-            const location_info = JSON.parse(location_info_json); // <-- Add this parsing line
+            const location_info = JSON.parse(location_info_json);
 
             // Log that the signal was received.
             console.log("JS: promptUserToConfirmLocationSignal received.", {location_info, original_hint, original_instruction});
             // Update the active task details.
-            app.activeTaskDetails = { location_info, original_hint, user_instruction: original_instruction, status: 'awaiting_location_confirmation' };
+            app.activeTaskDetails = { ...app.activeTaskDetails, location_info, original_hint, user_instruction: original_instruction, status: 'awaiting_location_confirmation' };
             // Update the original hint display, located snippet preview, and revised hint input.
             if (app.ui.originalHintDisplay) app.ui.originalHintDisplay.textContent = original_hint;
             if (app.ui.locatedSnippetPreview) app.ui.locatedSnippetPreview.textContent = location_info.snippet;
