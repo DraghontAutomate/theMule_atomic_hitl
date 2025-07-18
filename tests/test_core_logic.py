@@ -91,11 +91,14 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         # --- Direct instance mocking of LLMService ---
         self.editor_logic.llm_service = MagicMock(spec=LLMService)
 
-        def default_mock_invoke_llm_side_effect(task_name, user_prompt):
+        def default_mock_invoke_llm_side_effect(task_name, user_prompt, **kwargs):
             if task_name == "locator":
                 hint_match = re.search(r"hint: '([^']*)'", user_prompt)
                 hint = hint_match.group(1) if hint_match else "UNKNOWN_HINT"
-                return hint
+                # The real locator now returns a dict with a "snippets" key.
+                # The test was failing because it expected a raw string.
+                # The mock must now replicate the structured output.
+                return {"snippets": [hint]}
             elif task_name == "editor":
                 snippet_match = re.search(r"Original Snippet:\n---\n(.*?)\n---", user_prompt, re.DOTALL)
                 snippet_to_edit = snippet_match.group(1).strip() if snippet_match else "UNKNOWN_SNIPPET"

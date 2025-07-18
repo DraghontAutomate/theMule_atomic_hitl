@@ -748,17 +748,17 @@ class SurgicalEditorLogic:
         try:
             # The system prompt for "locator" is defined in config and fetched by LLMService
             # The user prompt for the locator task is the 'hint'.
-            # We expect the LLM to return the *exact text of the snippet*.
-            located_snippet_text = self.llm_service.invoke_llm(
+            # We expect the LLM to return a dictionary with a "snippets" key.
+            response = self.llm_service.invoke_llm(
                 task_name="locator",
                 user_prompt=f"Given the following text:\n\n---\n{text_to_search}\n---\n\nIdentify and return the exact text snippet that matches the hint: '{hint}'. Respond only with the identified snippet text and nothing else."
             )
 
-            if not located_snippet_text or not located_snippet_text.strip():
-                self.callbacks['show_error'](f"LLM locator returned an empty response for hint: '{hint}'")
+            if not response or "snippets" not in response or not response["snippets"]:
+                self.callbacks['show_error'](f"LLM locator returned an invalid response for hint: '{hint}'")
                 return None
 
-            located_snippet_text = located_snippet_text.strip()
+            located_snippet_text = "\n".join(response["snippets"]).strip()
 
             # Now, find this located_snippet_text within the original text_to_search
             # This assumes the LLM returns a substring that exists in text_to_search.
