@@ -26,8 +26,9 @@ Manages application configuration.
     *   `get_config() -> Dict[str, Any]`: Returns the fully resolved configuration dictionary.
     *   `get_field_config(field_name: str) -> Optional[Dict[str, Any]]`: Retrieves the configuration for a specific field by its `name`.
     *   `get_action_config(action_name: str) -> Optional[Dict[str, Any]]`: Retrieves the configuration for a specific action by its `name`.
-    *   `get_llm_config() -> Dict[str, Any]`: Returns the `llm_config` section of the configuration, falling back to the `llm_config` from `DEFAULT_CONFIG` if not present.
-    *   `get_system_prompt(task_name: str) -> Optional[str]`: Retrieves a specific system prompt from `llm_config.system_prompts`.
+    *   `get_llm_config() -> Dict[str, Any]`: Returns the `llm_config` section of the configuration.
+    *   `get_system_prompt(task_name: str) -> Optional[str]`: Retrieves a specific system prompt from a file path specified in `llm_config.system_prompts`.
+    *   `get_output_schema(task_name: str) -> Optional[Dict[str, Any]]`: Retrieves the JSON output schema for a given LLM task from `llm_config.output_schemas`.
 *   **Key Properties**:
     *   `main_editor_original_field -> str`: Name of the data field for the original text in the main diff editor (from `fields` config). Defaults to `'originalText'`.
     *   `main_editor_modified_field -> str`: Name of the data field for the modified text in the main diff editor. Defaults to `'editedText'`.
@@ -40,79 +41,42 @@ Contains the core business logic for the HITL editing process.
 ### Class: `SurgicalEditorLogic`
 
 *   **Purpose**: Manages the state and lifecycle of edit requests, orchestrating LLM interactions and UI updates via callbacks.
-*   **Initialization (`__init__(self, initial_data: Dict[str, Any], config: Config, callbacks: Dict[str, Callable])`)**:
-    *   `initial_data`: The starting data for the editing session. A deep copy is stored in `_initial_data_snapshot` for revert functionality.
+*   **Initialization (`__init__(self, initial_data: Union[Dict[str, Any], str], config: Config, callbacks: Dict[str, Callable], llm_service_instance: Optional[LLMService] = None)`)**:
+    *   `initial_data`: The starting data for the editing session, can be a string or dictionary.
     *   `config`: An instance of `themule_atomic_hitl.config.Config`.
-    *   `callbacks`: A dictionary of functions provided by the `Backend` (in `runner.py`) to communicate with the UI. Expected keys: `'update_view'`, `'show_error'`, `'confirm_location_details'`, `'show_diff_preview'`, `'request_clarification'`.
-    *   Initializes `edit_request_queue` (a `collections.deque`) and `active_edit_task` (Optional[Dict]).
-    *   Initializes `llm_service` (an instance of `LLMService`) using `config.get_llm_config()`. Handles potential errors during LLM service initialization.
-    *   Ensures `initial_data` contains fields specified by `config.main_editor_original_field` and `config.main_editor_modified_field`.
+    *   `callbacks`: A dictionary of functions provided by the `Backend`. Expected keys include `'update_view'`, `'show_error'`, `'confirm_location_details'`, `'show_diff_preview'`, `'request_clarification'`, and `'show_llm_disabled_warning'`.
+    *   Initializes `llm_service` (an instance of `LLMService`) using `config.get_llm_config()`.
 *   **State Attributes**:
     *   `data: Dict[str, Any]`: The current, live data being edited.
-    *   `_initial_data_snapshot: Dict[str, Any]`: A deep copy of the data passed during initialization, used for reverting changes.
-    *   `edit_results: list`: A log of completed edit tasks and their outcomes.
-    *   `edit_request_queue: deque[Tuple[str, str, str]]`: Stores pending edit requests as tuples of `(user_hint, user_instruction, content_snapshot_at_request_time)`.
-    *   `active_edit_task: Optional[Dict[str, Any]]`: Holds details of the task currently being processed. Structure includes:
-        *   `user_hint`, `user_instruction`, `original_content_snapshot`
-        *   `status`: e.g., "locating_snippet", "awaiting_location_confirmation", "awaiting_diff_approval", "location_failed", "awaiting_clarification".
-        *   `location_info`: Dict with `{'snippet', 'start_idx', 'end_idx'}` from locator.
-        *   `llm_generated_snippet_details`: Dict with `{'start', 'end', 'original_snippet', 'edited_snippet'}`.
+    *   `_initial_data_snapshot: Dict[str, Any]`: A deep copy of the initial data for revert functionality.
+    *   `edit_request_queue: deque[Dict[str, Any]]`: A queue for pending edit requests. Each request is a dictionary containing `id`, `type` ('hint_based' or 'selection_specific'), `instruction`, `content_snapshot`, `hint`, and `selection_details`.
+    *   `active_edit_task: Optional[Dict[str, Any]]`: Holds the details of the task currently being processed.
 *   **Key Methods for Edit Lifecycle**:
-    *   `start_session()`: Initializes the session, ensures original text fields are correctly set up for diffing, notifies the view, and attempts to process the first edit request.
-    *   `add_edit_request(hint: str, instruction: str)`:
-        *   Takes a snapshot of `self.current_main_content`.
-        *   Appends `(hint, instruction, snapshot)` to `edit_request_queue`.
-        *   Calls `_notify_view_update()` and `_process_next_edit_request()` if no task is active.
+    *   `add_edit_request(instruction: str, request_type: str, hint: Optional[str] = None, selection_details: Optional[Dict[str, Any]] = None)`: Adds a new structured edit request to the queue and triggers processing.
     *   `_process_next_edit_request()`:
-        *   If no active task and queue is not empty, pops the next request.
-        *   Sets up `self.active_edit_task` with status "locating_snippet".
-        *   Calls `_notify_view_update()` and then `_execute_llm_attempt()`.
-    *   `_execute_llm_attempt()`: (Gatekeeper Loop - Part 1)
-        *   Uses `self._llm_locator()` with the task's `user_hint` and `original_content_snapshot`.
-        *   If location successful:
-            *   Updates `active_edit_task['location_info']` and status to "awaiting_location_confirmation".
-            *   Calls `callbacks['confirm_location_details']` with location info, hint, and instruction.
-        *   If location fails: Updates status to "location_failed".
-    *   `proceed_with_edit_after_location_confirmation(confirmed_hint_or_location_details: Dict, original_instruction: str)`: (Worker Loop - Part 1)
-        *   Called by UI after user confirms/corrects location.
-        *   Validates `confirmed_hint_or_location_details`.
-        *   Updates `active_edit_task['location_info']`.
-        *   Calls `self._llm_editor()` with the confirmed snippet and `original_instruction`.
-        *   Stores result in `active_edit_task['llm_generated_snippet_details']` and sets status to "awaiting_diff_approval".
-        *   Calls `callbacks['show_diff_preview']` with original, edited snippets, and context.
-    *   `process_llm_task_decision(decision: str, manually_edited_snippet: Optional[str] = None)`: (Worker Loop - Part 2)
-        *   Handles user's decision ('approve', 'reject', 'cancel') on the LLM's suggestion.
-        *   If 'approve':
-            *   Uses `manually_edited_snippet` if provided, else `llm_generated_snippet_details['edited_snippet']`.
-            *   Constructs the new content based on `active_edit_task['original_content_snapshot']` and the chosen snippet.
-            *   **Critically, updates `self.current_main_content` with this new content.** This assumes a sequential processing model where the indices from the snapshot are applied to the snapshot's content, and this result becomes the new live content.
-            *   Logs result, clears `active_edit_task`, calls `_notify_view_update()`, and `_process_next_edit_request()`.
-        *   If 'reject': Sets status to "awaiting_clarification", calls `callbacks['request_clarification']`.
-        *   If 'cancel': Logs result, clears `active_edit_task`, calls `_notify_view_update()`, and `_process_next_edit_request()`.
-    *   `update_active_task_and_retry(new_hint: str, new_instruction: str)`:
-        *   Called by UI after user provides clarification for a rejected task.
-        *   Updates `active_edit_task`'s hint/instruction, resets status to "locating_snippet".
-        *   Calls `_execute_llm_attempt()` to retry.
+        *   If no active task, pops the next request from the queue.
+        *   If `hint_based`, calls `_execute_llm_locator_attempt()`.
+        *   If `selection_specific`, it derives the location from selection details and calls `_initiate_llm_edit_for_task()`.
+    *   `_execute_llm_locator_attempt()`: (Gatekeeper) Uses `_llm_locator()` and, on success, calls the `confirm_location_details` callback.
+    *   `proceed_with_edit_after_location_confirmation(confirmed_location_details: Dict, original_instruction: str)`: (Worker) Called after user confirms location. Updates the task and calls `_initiate_llm_edit_for_task()`.
+    *   `_initiate_llm_edit_for_task(task: Dict[str, Any])`: Calls `_llm_editor()` with the correct snippet and instruction, then calls the `show_diff_preview` callback.
+    *   `process_llm_task_decision(decision: str, manually_edited_snippet: Optional[str] = None)`:
+        *   Handles user's decision ('approve', 'reject', 'cancel').
+        *   If 'approve', it calculates the correct character offsets (from locator or selection details) and applies the approved snippet to the content snapshot. The result updates the main content.
+        *   If 'reject', it calls the `request_clarification` callback.
+    *   `update_active_task_and_retry(new_hint: str, new_instruction: str)`: Restarts a rejected task with new user input.
+    *   `_convert_line_col_to_char_offsets(...)`: A helper method to convert 1-based line/column selection data into 0-based character offsets for precise editing.
 *   **LLM Interaction Methods**:
     *   `_llm_locator(text_to_search: str, hint: str) -> Optional[Dict[str, Any]]`:
-        *   Uses `self.llm_service.invoke_llm()` with task "locator".
-        *   User prompt combines `text_to_search` and `hint`, asking LLM to return the exact snippet.
-        *   If successful, finds the returned snippet in `text_to_search` to get `start_idx`, `end_idx`. Includes a lenient regex fallback if exact match fails.
+        *   Uses `self.llm_service.invoke_llm()` with task "locator" and a structured output schema.
+        *   Parses the JSON response from the LLM.
+        *   Finds the returned snippet in `text_to_search` to get `start_idx`, `end_idx`. Includes a lenient regex fallback.
         *   Returns `{'start_idx', 'end_idx', 'snippet'}` or `None`.
     *   `_llm_editor(snippet_to_edit: str, instruction: str) -> str`:
         *   Uses `self.llm_service.invoke_llm()` with task "editor".
-        *   User prompt combines `snippet_to_edit` and `instruction`, asking LLM to return only the modified snippet.
-        *   Returns the edited snippet (stripped) or the original snippet on error/empty response.
+        *   Returns the edited snippet.
 *   **Generic Action Handling**:
-    *   `perform_action(action_name: str, payload: Optional[Dict[str, Any]] = None)`:
-        *   Dynamically calls handler methods like `handle_approve_main_content(payload)`.
-        *   `handle_approve_main_content(payload)`: Updates `self.current_main_content` and other fields in `self.data` from the payload.
-        *   `handle_revert_changes(payload)`: Resets `self.data` to `_initial_data_snapshot`, cancels active task, and clears `edit_request_queue`.
-*   **UI Notification**:
-    *   `_notify_view_update()`: Calls `callbacks['update_view']` with current `self.data`, `self.config_manager.get_config()`, and queue status information.
-*   **Data Access**:
-    *   `current_main_content` (property): Getter/setter for `self.data[self.main_text_field]`.
-    *   `get_final_data() -> Dict[str, Any]`: Returns `self.data`.
+    *   `perform_action(action_name: str, payload: Optional[Dict[str, Any]] = None)`: Dynamically calls `handle_...` methods for actions like `approve_main_content` and `revert_changes`.
 
 ## `src/themule_atomic_hitl/llm_service.py`
 
@@ -122,33 +86,24 @@ Handles all communication with Large Language Models.
 
 *   **Purpose**: To abstract LLM interactions, manage different providers, and handle API calls.
 *   **Initialization (`__init__(self, llm_config: dict)`)**:
-    *   `llm_config`: A dictionary (usually from `Config.get_llm_config()`) containing:
-        *   `providers`: Configuration for each LLM provider (e.g., "google", "local") including model names, API key environment variable names, base URLs (for local), and temperature.
-        *   `task_llms`: Mapping of task names (e.g., "locator", "editor") to provider names. Includes a "default" provider.
-        *   `system_prompts`: Mapping of task names to default system prompt strings.
-    *   Calls `_initialize_llms()`.
+    *   `llm_config`: A dictionary (from `Config.get_llm_config()`) containing `providers`, `task_llms`, `system_prompts`, and `output_schemas`.
 *   **Private Method (`_initialize_llms()`)**:
     *   Iterates through providers in `self.config['providers']`.
-    *   **Google**: If "google" provider configured:
-        *   Retrieves API key from environment variable specified in `api_key_env`.
-        *   Initializes `self.google_llm = ChatGoogleGenerativeAI(...)` from `langchain_google_genai`.
-    *   **Local (OpenAI-compatible)**: If "local" provider configured:
-        *   Retrieves base URL from environment variable specified in `base_url_env`.
-        *   Initializes `self.local_llm = ChatOpenAI(...)` from `langchain_openai`, setting `openai_api_base` and `openai_api_key` (can be dummy for some local LLMs).
-    *   Handles and prints errors if initialization fails for any provider.
+    *   Initializes `langchain` clients (`ChatGoogleGenerativeAI`, `ChatOpenAI`) based on the configuration.
 *   **Key Public Methods**:
     *   `get_llm_for_task(task_name: str)`:
-        *   Determines which LLM client (`self.google_llm` or `self.local_llm`) to use based on `task_name` and the `task_llms` mapping in `self.config`.
-        *   Falls back to the "default" provider if task-specific one is not available or configured.
-        *   Ultimate fallback to any initialized LLM if the preferred default also fails.
-        *   Raises `RuntimeError` if no LLM can be selected/initialized.
-    *   `invoke_llm(task_name: str, user_prompt: str, system_prompt_override: Optional[str] = None) -> str`:
-        *   Selects LLM using `get_llm_for_task(task_name)`.
-        *   Determines system prompt: uses `system_prompt_override` if provided; otherwise, fetches from `self.config['system_prompts'][task_name]`; falls back to a generic "You are a helpful AI assistant." if none found.
-        *   Constructs a list of messages: `[SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]` (from `langchain_core.messages`).
-        *   Invokes the selected LLM with these messages (`llm.invoke(messages)`).
-        *   Returns `response.content` (the string output from LLM).
-        *   Raises exceptions on LLM API errors.
+        *   Determines which LLM client (`self.google_llm` or `self.local_llm`) to use based on `task_name` and the `task_llms` mapping.
+        *   Includes robust fallback to a default provider and then to any available provider.
+    *   `invoke_llm(task_name: str, user_prompt: str, system_prompt_override: Optional[str] = None, strict: bool = False) -> Union[str, Dict[str, Any]]`:
+        *   Selects the LLM for the task.
+        *   Retrieves the system prompt (from file via `Config` class or override).
+        *   Checks `self.config['output_schemas']` for the given `task_name`.
+        *   **If a schema exists**:
+            *   Dynamically creates a Pydantic model from the JSON schema using `jsonschema_to_pydantic`.
+            *   Binds the model to the LLM using `llm.with_structured_output(pydantic_model)`.
+            *   Invokes the LLM and returns the parsed dictionary from the Pydantic model (`response.dict()`).
+        *   **If no schema exists**:
+            *   Invokes the LLM normally and returns the string content of the response.
 
 ## `src/themule_atomic_hitl/runner.py`
 
@@ -278,87 +233,45 @@ Provides a high-level library interface to the HITL tool.
 
 This technical documentation provides a deeper dive into the implementation details of the TheMule Atomic HITL tool.
 
-## Sequence Diagrams
-
-*   [TheMule Atomic HITL Sequence Diagram](./themule_atomic_hitl_sequence_diagram.md)
-*   [LLM Prompt Tool Sequence Diagram](./llm_prompt_tool_sequence_diagram.md)
-
-## `src/llm_prompt_tool/evaluator.py`
-
-### Class: `ResponseEvaluator`
-*   **Purpose**: To evaluate LLM responses based on a set of criteria.
-*   **Initialization (`__init__(self, criteria=None)`)**:
-    *   Takes an optional `criteria` dictionary; otherwise, it uses `DEFAULT_CRITERIA`.
-    *   Normalizes the weights of the criteria to ensure they sum to 1.0.
-*   **Key Methods**:
-    *   `evaluate_response(self, prompt_text: str, response_text: str, manual_scores: dict = None) -> dict`:
-        *   Evaluates a response against the configured criteria.
-        *   If `manual_scores` are provided, it uses them; otherwise, it uses mock scores.
-        *   Returns a dictionary with the overall score and a breakdown of scores for each criterion.
-    *   `suggest_prompt_improvements(self, system_prompt: str, user_prompt: str, evaluation: dict) -> tuple[str, str]`:
-        *   Suggests improvements to the system and user prompts based on the evaluation scores.
-        *   The suggestions are based on a set of heuristics.
-
-## `src/llm_prompt_tool/llm_tester.py`
-
-### Class: `LLMInterface`
-*   **Purpose**: To provide an interface to an LLM.
-*   **Initialization (`__init__(self, api_key=None, model_name="mock-model")`)**:
-    *   Takes an optional `api_key` and `model_name`.
-    *   If `model_name` is `"mock-model"`, it uses a mock LLM; otherwise, it would initialize a real LLM client.
-*   **Key Methods**:
-    *   `get_response(self, system_prompt: str, user_prompt: str) -> str`:
-        *   Gets a response from the LLM.
-        *   If using the mock LLM, it returns a random response from a predefined list.
-        *   It also logs the interaction.
-    *   `get_interaction_log(self) -> list`:
-        *   Returns the log of all interactions.
-
-## `src/llm_prompt_tool/main_loop.py`
-
-### Function: `run_refinement_cycle(llm_interface: LLMInterface, evaluator: ResponseEvaluator, current_system_prompt: str, current_user_prompt: str, iteration: int, num_total_iterations: int) -> tuple[str, str, dict]`
-*   **Purpose**: To run a single refinement cycle.
-*   **Logic**:
-    1.  Gets a response from the LLM.
-    2.  Evaluates the response.
-    3.  Suggests improvements to the prompts.
-    4.  Logs the cycle.
-*   **Returns**: The new system prompt, the new user prompt, and the cycle log.
-
-### Function: `main(args)`
-*   **Purpose**: The main function of the script.
-*   **Logic**:
-    1.  Initializes the `LLMInterface` and `ResponseEvaluator`.
-    2.  Loops through the initial user prompts.
-    3.  For each prompt, it runs a series of refinement cycles.
-    4.  Saves the results to a file.
-
-## `src/themule_atomic_hitl/main.py`
+## `src/themule_atomic_hitl/terminal_main.py`
 
 ### Function: `main()`
 *   **Purpose**: The main entry point for the application.
 *   **Logic**:
-    1.  Parses command-line arguments (`--no-frontend`, `--config`, `--data`).
-    2.  Initializes the `Config` object.
-    3.  Loads initial data from a file or uses a default.
-    4.  If `--no-frontend` is specified, it runs the terminal interface; otherwise, it runs the GUI application.
+    1.  Sets up logging by calling `setup_logging()` from `logging_config.py`.
+    2.  Parses command-line arguments: `--no-frontend`, `--config`, `--data`.
+    3.  Initializes the `Config` object, loading a custom config if provided.
+    4.  Loads initial data from a file (JSON or text) or uses a default if no file is provided.
+    5.  If `--no-frontend` is specified, it logs that the terminal interface is not yet implemented.
+    6.  If in GUI mode, it calls `hitl_node.hitl_node_run` to start the application, passing the loaded data and config path.
+    7.  Logs the final data returned by the application upon session completion.
 
 ## `src/themule_atomic_hitl/terminal_interface.py`
 
 ### Class: `TerminalInterface`
-*   **Purpose**: To provide a terminal-based interface for the Surgical Editor.
+*   **Purpose**: To provide a terminal-based interface for the Surgical Editor. (Note: Implementation is currently incomplete).
 *   **Initialization (`__init__(self, initial_data: Dict[str, Any], config: Config)`)**:
     *   Initializes the `SurgicalEditorLogic` with terminal-specific callbacks.
 *   **Key Methods**:
     *   `run(self) -> Dict[str, Any]`: Starts the main loop for the terminal interface.
-    *   `display_main_menu(self)`: Displays the main menu of options.
-    *   `handle_new_edit_request(self)`: Handles the creation of a new edit request.
-    *   `on_update_view(self, data: Dict[str, Any], config_dict: Dict[str, Any], queue_info: Dict[str, Any])`: Callback to update the view.
-    *   `on_show_diff_preview(self, original_snippet: str, edited_snippet: str, before_context: str, after_context: str)`: Callback to show a diff preview.
-    *   `on_request_clarification(self)`: Callback to request clarification.
-    *   `on_show_error(self, msg: str)`: Callback to display an error message.
-    *   `on_confirm_location_details(self, location_info: dict, original_hint: str, original_instruction: str)`: Callback to confirm a located snippet.
+    *   `on_update_view(...)`, `on_show_diff_preview(...)`, etc.: A suite of callback methods to handle updates from the `SurgicalEditorLogic` and display them in the terminal.
 
 ### Function: `run_terminal_interface(initial_data: Dict[str, Any], config: Config) -> Dict[str, Any]`
 *   **Purpose**: Sets up and runs the terminal-based interface.
+
+## `src/themule_atomic_hitl/logging_config.py`
+
+### Function: `setup_logging()`
+*   **Purpose**: Configures the root logger for the application.
+*   **Logic**:
+    1.  Gets the root logger and sets its level to `DEBUG`.
+    2.  Removes any pre-existing handlers to ensure a clean setup.
+    3.  Creates a `FileHandler` to write `DEBUG` level logs and higher to `app.log`. The log format is detailed, including timestamp, level, filename, and line number.
+    4.  Creates a `StreamHandler` to write `INFO` level logs and higher to `sys.stdout`. The log format is simple, showing only the message.
+    5.  Adds both handlers to the root logger.
+
+## `src/themule_atomic_hitl/prompts/`
+This directory contains the text files used as system prompts for the LLM. Externalizing prompts allows for easier modification without changing the Python code.
+*   **`editor.txt`**: The system prompt for the "editor" task. It instructs the LLM to act as an editor, applying a directive as surgically as possible to a given text snippet.
+*   **`locator.txt`**: The system prompt for the "locator" task. It instructs the LLM to act as a locator, finding specific sentences or paragraphs in a larger text based on a hint and returning them in a structured JSON format.
 ```

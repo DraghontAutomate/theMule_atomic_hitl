@@ -7,8 +7,10 @@
 ├── doc
 │   ├── functional_documentation.md
 │   ├── llm_prompt_tool_description.md
+│   ├── llm_prompt_tool_sequence_diagram.md
 │   ├── relationship_diagram.md
-│   └── technical_documentation.md
+│   ├── technical_documentation.md
+│   └── themule_atomic_hitl_sequence_diagram.md
 ├── examples
 │   ├── __init__.py
 │   ├── config.json
@@ -36,10 +38,15 @@
 │       │   └── index.html
 │       ├── hitl_node.py
 │       ├── llm_service.py
-│       ├── main.py
-│       └── runner.py
-│       └── terminal_interface.py
+│       ├── logging_config.py
+│       ├── prompts
+│       │   ├── editor.txt
+│       │   └── locator.txt
+│       ├── runner.py
+│       ├── terminal_interface.py
+│       └── terminal_main.py
 └── tests
+    ├── __init__.py
     ├── asimov_mule_analysis.txt
     ├── bruce_lee_zend_martial_arts.txt
     ├── run_test_return_report.py
@@ -58,8 +65,10 @@
 *   **doc/**: A directory containing the project's documentation.
     *   `functional_documentation.md`: Provides a high-level functional overview of all the modules in the repository.
     *   `llm_prompt_tool_description.md`: Provides a detailed description of the `llm_prompt_tool`.
+    *   `llm_prompt_tool_sequence_diagram.md`: A sequence diagram illustrating the interactions within the LLM prompt tool.
     *   `relationship_diagram.md`: Outlines the relationships and dependencies between all the Python files in the repository.
     *   `technical_documentation.md`: Provides a detailed technical breakdown of all the modules, classes, and functions in the repository.
+    *   `themule_atomic_hitl_sequence_diagram.md`: A sequence diagram illustrating the interactions within the main HITL tool.
 *   **examples/**: A directory containing examples of how to use the tool.
     *   `__init__.py`: Makes the `examples` directory a Python package.
     *   `config.json`: An example configuration file for the `themule_atomic_hitl` tool.
@@ -78,19 +87,22 @@
         *   `main_loop.py`: The main script for the `llm_prompt_tool`.
     *   `themule_atomic_hitl/`: A directory containing the `themule_atomic_hitl` tool.
         *   `__init__.py`: Makes the `themule_atomic_hitl` directory a Python package.
-        *   `config.py`: A module for managing the tool's configuration.
-        *   `core.py`: The core logic of the tool.
-        *   `frontend/`: A directory containing the tool's frontend code.
+        *   `config.py`: A module for managing the tool's configuration, including LLM settings.
+        *   `core.py`: The core logic of the tool, handling edit requests of different types (hint-based, selection-specific).
+        *   `frontend/`: A directory containing the tool's web-based frontend code.
             *   `css/`: A directory containing the tool's CSS files.
                 *   `reset.css`: The main CSS file for the tool.
             *   `frontend.js`: The main JavaScript file for the tool.
             *   `index.html`: The main HTML file for the tool.
         *   `hitl_node.py`: A module for running the tool as a library.
-        *   `llm_service.py`: A module for interacting with an LLM.
-        *   `main.py`: The main entry point for the application.
+        *   `llm_service.py`: A module for interacting with LLMs, featuring provider management and structured output.
+        *   `logging_config.py`: A module for setting up application-wide logging.
+        *   `prompts/`: A directory containing system prompt text files for the LLM.
         *   `runner.py`: A module for running the tool's GUI.
-        *   `terminal_interface.py`: A module for running the tool's terminal interface.
+        *   `terminal_interface.py`: A module for running the tool's terminal interface (implementation incomplete).
+        *   `terminal_main.py`: The main entry point for the application, handling CLI arguments.
 *   **tests/**: A directory containing the project's tests.
+    *   `__init__.py`: Makes the `tests` directory a Python package.
     *   `asimov_mule_analysis.txt`: A text file for testing.
     *   `bruce_lee_zend_martial_arts.txt`: A text file for testing.
     *   `run_test_return_report.py`: A script for running the tests and returning a report.
