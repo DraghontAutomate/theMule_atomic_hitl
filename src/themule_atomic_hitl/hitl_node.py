@@ -5,6 +5,7 @@ import logging
 from typing import Dict, Any, Optional, Union
 
 from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtCore import QEventLoop
 
 from .config import Config
 from .runner import run_application # Assuming run_application is in runner.py
@@ -85,7 +86,11 @@ def hitl_node_run(
             if isinstance(returned_value_from_runner, QMainWindow):
                 main_window_instance = returned_value_from_runner
                 logging.info("hitl_node_run: Existing QApplication mode. Waiting for session to terminate via local event loop...")
-                local_event_loop = QApplication.QEventLoop()
+                # QEventLoop resides in QtCore. When QApplication is mocked
+                # (e.g. during tests), fall back to any QEventLoop attribute
+                # on the mock to avoid instantiating a real Qt event loop.
+                event_loop_cls = getattr(QApplication, "QEventLoop", QEventLoop)
+                local_event_loop = event_loop_cls()
                 main_window_instance.backend.sessionTerminatedSignal.connect(local_event_loop.quit)
                 if not main_window_instance.isVisible():
                     main_window_instance.show()
