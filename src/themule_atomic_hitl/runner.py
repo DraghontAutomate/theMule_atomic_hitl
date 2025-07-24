@@ -14,9 +14,11 @@ logger.debug("RUNNER.PY: Module imported/loaded")
 
 import sys
 import os
+os.environ["QTWEBENGINE_REMOTE_DEBUGGING"] = "9222"
 import json # Still needed for final data dump
+import queue
 from typing import Dict, Any, Optional, Union # Optional added, Union added
-from PyQt5.QtCore import QObject, pyqtSlot, QUrl, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSlot, QUrl, pyqtSignal, QThread
 from PyQt5.QtWidgets import QApplication, QMainWindow
 
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
@@ -72,6 +74,33 @@ def _load_json_file(path: str) -> Dict[str, Any]:
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"Error loading JSON from {path}: {e}")
         return {}
+
+
+class LogicThread(QThread):
+    """Worker thread that processes logic calls without blocking the UI."""
+
+    def __init__(self, logic):
+        super().__init__()
+        self.logic = logic
+        self._tasks = queue.Queue()
+        self._running = True
+
+    def run(self):
+        while self._running:
+            func, args, kwargs = self._tasks.get()
+            if func is None:
+                break
+            try:
+                func(*args, **kwargs)
+            except Exception as exc:  # pragma: no cover - just logging
+                logging.error(f"LogicThread task error: {exc}", exc_info=True)
+
+    def enqueue(self, func, *args, **kwargs):
+        self._tasks.put((func, args, kwargs))
+
+    def stop(self):
+        self._running = False
+        self._tasks.put((None, (), {}))
 
 class Backend(QObject):
     """
@@ -140,6 +169,8 @@ class Backend(QObject):
 
         # Instantiate the core logic engine, passing the Config object
         self.logic = SurgicalEditorLogic(initial_data, self.config_manager, logic_callbacks)
+        self._worker = LogicThread(self.logic)
+        self._worker.start()
 
     def on_show_llm_disabled_warning(self):
         """
@@ -157,7 +188,20 @@ class Backend(QObject):
             config_dict: The configuration dictionary (from config_manager.get_config()).
             queue_info: Information about the task queue.
         """
-        self.updateViewSignal.emit(json.dumps(data), json.dumps(config_dict), json.dumps(queue_info))
+        logger.info("RUNNER.PY: on_update_view emitting updateViewSignal")
+        logger.debug(
+            "RUNNER.PY: updateViewSignal payload: %s",
+            {
+                "data": data,
+                "config": config_dict,
+                "queue_info": queue_info,
+            },
+        )
+        self.updateViewSignal.emit(
+            json.dumps(data),
+            json.dumps(config_dict),
+            json.dumps(queue_info),
+        )
 
 
     def on_show_diff_preview(self, original_snippet: str, edited_snippet: str, before_context: str, after_context: str):
@@ -216,16 +260,15 @@ class Backend(QObject):
         """
         logger.debug("BACKEND (startSession): Called by JavaScript.")
         try:
-            self.logic.start_session()
-            logger.debug("BACKEND (startSession): self.logic.start_session() returned.")
+            self._worker.enqueue(self.logic.start_session)
+            logger.debug("BACKEND (startSession): task enqueued.")
         except Exception as e:
             logger.error(f"BACKEND (startSession): Error during self.logic.start_session(): {e}")
-            # If self.showErrorSignal is available and connected, emit it
             if hasattr(self, 'showErrorSignal') and self.showErrorSignal is not None:
-                 try:
-                     self.showErrorSignal.emit(f"Error in startSession: {str(e)}")
-                 except Exception as sig_e:
-                     logger.error(f"BACKEND (startSession): Error emitting showErrorSignal: {sig_e}")
+                try:
+                    self.showErrorSignal.emit(f"Error in startSession: {str(e)}")
+                except Exception as sig_e:
+                    logger.error(f"BACKEND (startSession): Error emitting showErrorSignal: {sig_e}")
 
 
     @pyqtSlot(str) # Argument is now a single JSON string
@@ -254,11 +297,12 @@ class Backend(QObject):
                     logger.error(f"BACKEND (submitEditRequest): Missing hint for hint_based request: {payload}")
                     self.showErrorSignal.emit("Invalid hint-based request: hint missing.")
                     return
-                self.logic.add_edit_request(
-                    instruction=instruction,
-                    request_type=request_type,
-                    hint=hint,
-                    selection_details=None
+                self._worker.enqueue(
+                    self.logic.add_edit_request,
+                    instruction,
+                    request_type,
+                    hint,
+                    None,
                 )
             elif request_type == "selection_specific":
                 selection_details = payload.get("selection_details")
@@ -266,11 +310,12 @@ class Backend(QObject):
                     logger.error(f"BACKEND (submitEditRequest): Missing or invalid selection_details for selection_specific request: {payload}")
                     self.showErrorSignal.emit("Invalid selection-specific request: selection_details missing or invalid.")
                     return
-                self.logic.add_edit_request(
-                    instruction=instruction,
-                    request_type=request_type,
-                    hint=None,
-                    selection_details=selection_details
+                self._worker.enqueue(
+                    self.logic.add_edit_request,
+                    instruction,
+                    request_type,
+                    None,
+                    selection_details,
                 )
             else:
                 logger.error(f"BACKEND (submitEditRequest): Unknown request type: {request_type}")
@@ -290,14 +335,22 @@ class Backend(QObject):
         """
         Slot called by JS after the user has confirmed/adjusted the snippet location.
         """
-        self.logic.proceed_with_edit_after_location_confirmation(confirmed_location_details, original_instruction)
+        self._worker.enqueue(
+            self.logic.proceed_with_edit_after_location_confirmation,
+            confirmed_location_details,
+            original_instruction,
+        )
 
     @pyqtSlot(str, str)
     def submitClarificationForActiveTask(self, new_hint: str, new_instruction: str):
         """
         Slot called by JS when providing new hint/instruction for a task awaiting clarification.
         """
-        self.logic.update_active_task_and_retry(new_hint, new_instruction)
+        self._worker.enqueue(
+            self.logic.update_active_task_and_retry,
+            new_hint,
+            new_instruction,
+        )
 
     @pyqtSlot(str, str, name="submitLLMTaskDecisionWithEdit")
     def submitLLMTaskDecisionWithEdit(self, decision: str, manually_edited_snippet: str):
@@ -305,7 +358,11 @@ class Backend(QObject):
         Slot called by JS to submit the user's decision on an LLM-generated edit,
         potentially including a manually edited version of the snippet.
         """
-        self.logic.process_llm_task_decision(decision, manually_edited_snippet if manually_edited_snippet else None)
+        self._worker.enqueue(
+            self.logic.process_llm_task_decision,
+            decision,
+            manually_edited_snippet if manually_edited_snippet else None,
+        )
 
     @pyqtSlot(str)
     def submitLLMTaskDecision(self, decision: str):
@@ -313,14 +370,14 @@ class Backend(QObject):
         Slot called by JS to submit the user's decision (approve/reject/cancel)
         without any manual edits to the snippet.
         """
-        self.logic.process_llm_task_decision(decision, None)
+        self._worker.enqueue(self.logic.process_llm_task_decision, decision, None)
 
     @pyqtSlot(str, dict)
     def performAction(self, action_name: str, payload: Dict[str, Any]):
         """
         Slot called by JS to perform generic actions like 'approve_main_content', 'revert', etc.
         """
-        self.logic.perform_action(action_name, payload)
+        self._worker.enqueue(self.logic.perform_action, action_name, payload)
         # Auto-termination for primary actions is removed here for cleaner runner.
         # The primary action in the UI should directly call terminateSession if that's desired.
         # Example: if self.config_manager.get_action_config(action_name).get("isPrimary", False):
@@ -333,6 +390,8 @@ class Backend(QObject):
         Retrieves final data, prints it and audit trail to console, and emits sessionTerminatedSignal.
         """
         final_data = self.logic.get_final_data()
+        self._worker.stop()
+        self._worker.wait()
 
         print("\n--- SESSION TERMINATED BY USER ---")
         main_text_field = self.logic.main_text_field # from core logic via config
@@ -500,7 +559,7 @@ def run_application(initial_data_param: Union[Dict[str, Any], str],
 
     if should_run_event_loop_here:
         logger.debug("RUNNER.PY: Starting new QApplication event loop (blocking).")
-        app_instance_to_use.exec_()
+        sys.exit(app_instance_to_use.exec_())
         logger.debug("RUNNER.PY: QApplication event loop finished.")
         return main_window.backend.logic.get_final_data()
     else:

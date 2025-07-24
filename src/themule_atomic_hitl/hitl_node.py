@@ -2,18 +2,25 @@
 
 import sys
 import logging
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 
-from PyQt5.QtWidgets import QApplication, QMainWindow
-from PyQt5.QtCore import QEventLoop
+if TYPE_CHECKING:
+    from PyQt5.QtWidgets import QApplication, QMainWindow
+    from PyQt5.QtCore import QEventLoop
+
+# Placeholders for test patching. Real imports occur inside `hitl_node_run`.
+QApplication = None
+QMainWindow = None
+QEventLoop = None
+run_application = None
+
 
 from .config import Config
-from .runner import run_application # Assuming run_application is in runner.py
 
 def hitl_node_run(
     content_to_review: Union[str, Dict[str, Any]],
     custom_config_path: Optional[str] = None,
-    existing_qt_app: Optional[QApplication] = None
+    existing_qt_app: Optional["QApplication"] = None
 ) -> Optional[Dict[str, Any]]:
     """
     Provides a library entry point to run the HITL tool.
@@ -37,6 +44,21 @@ def hitl_node_run(
         or None if the application could not be started or an error occurred.
     """
     logging.info("HITL_NODE_RUN_PYTHON: Entry point")
+    # Import Qt components lazily so that environments without a GUI
+    # (e.g. during unit testing) can still import this module.
+    from PyQt5.QtWidgets import QApplication, QMainWindow
+    from PyQt5.QtCore import QEventLoop
+
+    global run_application
+    if run_application is None:
+        from .runner import run_application as real_run_application
+        run_application = real_run_application
+
+    # Update global placeholders so patched tests can access them
+    globals()['QApplication'] = QApplication
+    globals()['QMainWindow'] = QMainWindow
+    globals()['QEventLoop'] = QEventLoop
+    globals()['run_application'] = run_application
     final_data: Optional[Dict[str, Any]] = None # Initialize final_data
     try:
         logging.debug("HITL_NODE_RUN_PYTHON: Inside try block, before Config init")

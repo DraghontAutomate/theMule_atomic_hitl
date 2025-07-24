@@ -20,7 +20,7 @@ def setup_logging():
 
     # Create a stream handler that logs info and higher level messages
     stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setLevel(logging.INFO)
+    stream_handler.setLevel(logging.DEBUG)
     stream_formatter = logging.Formatter('%(message)s')
     stream_handler.setFormatter(stream_formatter)
     logger.addHandler(stream_handler)
