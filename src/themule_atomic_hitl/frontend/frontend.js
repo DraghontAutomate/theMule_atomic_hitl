@@ -88,17 +88,20 @@ function renderConfigurableUI() {
     // If the container exists,
     if (container) {
         // If the container is the main body and there's a main diff editor element,
-        if (id === 'mainbody-container' && mainDiffEditorElement) {
-            // remove all children of the container except the main diff editor element and some other specific elements.
+        if (id === 'mainbody-container') {
+            // Remove all children except the diff editor (if present) and the HITL sections.
             Array.from(container.childNodes).forEach(child => {
-                if (child !== mainDiffEditorElement && !mainDiffEditorElement.contains(child) &&
-                    child.id !== 'location-confirmation-area' && child.id !== 'inner-loop-decision-area') {
+                const preserve = (child === mainDiffEditorElement) ||
+                                 (mainDiffEditorElement && mainDiffEditorElement.contains(child)) ||
+                                 child.id === 'location-confirmation-area' ||
+                                 child.id === 'inner-loop-decision-area';
+                if (!preserve) {
                     container.removeChild(child);
                 }
             });
-        } else if (id !== 'mainbody-container' || (id === 'mainbody-container' && !mainDiffEditorElement) ) {
-             // Otherwise, clear the container's inner HTML.
-             container.innerHTML = ''; // Clear if not mainbody, or if mainbody without preserved editor
+        } else {
+            // For other containers simply clear their content.
+            container.innerHTML = '';
         }
     } else {
         // If the container doesn't exist, log a warning.
