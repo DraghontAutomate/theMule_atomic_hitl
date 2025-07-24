@@ -8,6 +8,7 @@ for a human-in-the-loop editing process.
 import re
 import uuid
 import json
+import logging
 from typing import Callable, Dict, Any, Optional, Tuple, Union
 from collections import deque
 from .config import Config
@@ -760,6 +761,7 @@ class SurgicalEditorLogic:
                 task_name="locator",
                 user_prompt=f"Given the following text:\n\n---\n{text_to_search}\n---\n\nIdentify and return the exact text snippet that matches the location hint: '{hint}'. Your response must comply with imposed output schema."
             )
+            logging.debug(f"LLM locator response: {response}")
 
             if not response or "snippets" not in response or not response["snippets"]:
                 self.callbacks['show_error'](f"LLM locator returned an invalid response for hint: '{hint}'")
