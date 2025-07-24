@@ -83,7 +83,10 @@ class Worker(QObject):
     @pyqtSlot(object, tuple, dict)
     def execute_task(self, func, args, kwargs):
         """Run the provided callable with the given arguments."""
-        debugpy.debug_this_thread()
+        try:
+            debugpy.debug_this_thread()
+        except ConnectionRefusedError:
+            pass
         try:
             func(*args, **kwargs)
         except Exception as exc:  # pragma: no cover - just logging
@@ -91,6 +94,8 @@ class Worker(QObject):
                 f"Error in worker task '{getattr(func, '__name__', repr(func))}': {exc}",
                 exc_info=True,
             )
+        logging.debug("execute_task running in thread: %r", QThread.currentThread().objectName())
+
 
 class Backend(QObject):
     """
@@ -165,6 +170,7 @@ class Backend(QObject):
 
         # Set up worker thread
         self.thread = QThread()
+        self.thread.setObjectName("WorkerThread")
         self.worker = Worker()
         self.worker.moveToThread(self.thread)
 
