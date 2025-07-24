@@ -190,17 +190,6 @@ class SurgicalEditorLogic:
 
         # print(f"CORE_LOGIC (_notify_view_update): About to call update_view callback. Data: {self.data}, Config: {self.config_manager.get_config()}, QueueInfo: {queue_info}")
         self.callbacks['update_view'](self.data, self.config_manager.get_config(), queue_info)
-        # If PyQt is available and an application instance exists, allow
-        # pending events to be processed so the UI updates immediately.
-        try:
-            from PyQt5.QtWidgets import QApplication
-            app = QApplication.instance()
-            if app is not None:
-                app.processEvents()
-        except Exception:
-            # ImportError or other issues mean we're running in a non-Qt
-            # environment (e.g. during unit tests). Simply skip processing.
-            pass
 
     def add_edit_request(self,
                          instruction: str,
