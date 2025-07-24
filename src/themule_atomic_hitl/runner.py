@@ -14,6 +14,7 @@ logger.debug("RUNNER.PY: Module imported/loaded")
 
 import sys
 import os
+import debugpy
 os.environ["QTWEBENGINE_REMOTE_DEBUGGING"] = "9222"
 import json # Still needed for final data dump
 from typing import Dict, Any, Optional, Union # Optional added, Union added
@@ -82,6 +83,7 @@ class Worker(QObject):
     @pyqtSlot(object, tuple, dict)
     def execute_task(self, func, args, kwargs):
         """Run the provided callable with the given arguments."""
+        debugpy.debug_this_thread()
         try:
             func(*args, **kwargs)
         except Exception as exc:  # pragma: no cover - just logging
