@@ -628,6 +628,36 @@ class SurgicalEditorLogic:
         self._notify_view_update()
         self._execute_llm_locator_attempt() # Corrected method name
 
+    def retry_locator_with_new_hint(self, new_hint: str):
+        """Retry locating the snippet using a revised hint while awaiting location confirmation."""
+        if not self.active_edit_task or self.active_edit_task['status'] != 'awaiting_location_confirmation':
+            self.callbacks['show_error'](
+                "Reprocess requested but no task awaiting location confirmation.")
+            return
+
+        # Update the hint and reset location info
+        self.active_edit_task['user_hint'] = new_hint if new_hint else self.active_edit_task['user_hint']
+        self.active_edit_task['status'] = 'locating_snippet'
+        self.active_edit_task['location_info'] = None
+        self.active_edit_task['llm_generated_snippet_details'] = None
+        self._notify_view_update()
+        self._execute_llm_locator_attempt()
+
+    def cancel_active_task(self):
+        """Cancel the current edit task regardless of its state."""
+        if not self.active_edit_task:
+            self.callbacks['show_error']("No active task to cancel.")
+            return
+
+        self.edit_results.append({
+            "id": str(uuid.uuid4()),
+            "status": "task_cancelled",
+            "message": f"User cancelled LLM edit task for hint: '{self.active_edit_task.get('user_hint', '')}'"
+        })
+        self.active_edit_task = None
+        self._notify_view_update()
+        self._process_next_edit_request()
+
     def perform_action(self, action_name: str, payload: Optional[Dict[str, Any]] = None):
         """
         Handles generic actions that are not part of the core LLM edit loop,
