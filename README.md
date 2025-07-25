@@ -1,5 +1,12 @@
 # theMule_atomic_hitl
-Human-in-the-Loop for Close Guidance
+**Open-source Python tool for human-in-the-loop text editing with a PyQt5 diff viewer**
+
+<p align="center">
+  <img src="img/the_mule_logo_v3.jpg" alt="My Diagram" />
+</p>
+
+theMule is a Python Human‑in‑the‑Loop library that lets you approve, edit, or regenerate each atomic change of an LLM via an interactive diff GUI, eliminating endless prompt/retry loops. 
+Inspired by Asimov’s Mule and its power of control, it ensures maximum precision and transparency at every stage of editing.
 
 ## General Overview
 
@@ -29,6 +36,34 @@ This makes it adaptable for various scenarios where careful, step-by-step oversi
 *   **Automated Testing**: Comes with a full test suite and a reporting script (`run_tests.py`).
 *   **Git Pre-Push Hook**: Includes a pre-push hook script (`pre-push-hook.sh`) to ensure repository stability by running tests before every push.
 
+## Installation
+
+Install the package and its dependencies using `pip`:
+
+```bash
+pip install .
+```
+
+For development work, use editable mode so local changes are reflected immediately:
+
+```bash
+pip install -e .
+```
+
+## Quick Start
+
+After installation, run the demo application to see the HITL interface:
+
+```bash
+python examples/run_tool.py
+```
+
+If you're on a headless Linux system, use `xvfb-run -a` to launch the demo:
+
+```bash
+xvfb-run -a python examples/run_tool.py
+```
+
 ## Testing and Quality Assurance
 
 This project includes a comprehensive test suite to ensure stability and correctness.
@@ -37,11 +72,7 @@ This project includes a comprehensive test suite to ensure stability and correct
 
 A custom script, `run_tests.py`, is provided to discover, run, and report on all unit tests in the repository.
 
-1.  **Install Dependencies:** Ensure all project and development dependencies are installed.
-    ```bash
-    # This installs the package itself and all dependencies from requirements.txt
-    pip install .
-    ```
+1.  **Install Dependencies:** If you have not already done so, install the package as described in the [Installation](#installation) section.
 
 2.  **Run Full Test Suite:**
     ```bash
@@ -188,11 +219,15 @@ For command-line usage, the `examples/run_terminal.sh` script shows how to start
      ```
 
 **3. Python Packages:**
-   - Install requirements:
-     ```bash
-     pip install -r requirements.txt
-     ```
-     This typically includes `PyQt5` and `PyQtWebEngine`.
+  - Install the project and its dependencies using `setup.py`:
+    ```bash
+    pip install .
+    ```
+    For development, use editable mode:
+    ```bash
+    pip install -e .
+    ```
+    These commands install `theMule_atomic_hitl` along with all required packages such as `PyQt5` and `PyQtWebEngine`.
 
 ### Launching the Example Script
 
@@ -232,13 +267,17 @@ Once dependencies are installed:
      Your command prompt should now show `(venv)` at the beginning.
 
 **3. Install Python Packages:**
-   - With the virtual environment activated, install the required packages using pip:
-     ```bash
-     pip install -r requirements.txt
-     ```
-     This will install `PyQt5`, `PyQtWebEngine`, and any other necessary dependencies.
-     - If `pip` is not recognized, ensure Python's Scripts directory (e.g., `C:\Users\YourUser\AppData\Local\Programs\Python\Python3X\Scripts`) is in your PATH. If you used a virtual environment, `pip` should be available automatically when the environment is active.
-     - `PyQt5` installation on Windows is usually straightforward via pip as it provides pre-compiled binaries (wheels).
+  - With the virtual environment activated, install the package:
+    ```bash
+    pip install .
+    ```
+    For development work, you can install in editable mode:
+    ```bash
+    pip install -e .
+    ```
+    These commands install `PyQt5`, `PyQtWebEngine`, and any other required dependencies.
+    - If `pip` is not recognized, ensure Python's Scripts directory (e.g., `C:\Users\YourUser\AppData\Local\Programs\Python\Python3X\Scripts`) is in your PATH. If you used a virtual environment, `pip` should be available automatically when the environment is active.
+    - `PyQt5` installation on Windows is usually straightforward via pip as it provides pre-compiled binaries (wheels).
 
 **4. Running the Examples:**
    - Navigate to the repository root (if you're not already there).
@@ -392,3 +431,7 @@ for event in graph.stream(inputs):
 ```
 
 This integration pattern allows for powerful "human-in-the-loop" capabilities within autonomous agent systems, ensuring critical steps are validated or refined by human intelligence.
+
+## Keywords
+
+human-in-the-loop, text editing, PyQt5, diff viewer, LangGraph integration, open-source Python
