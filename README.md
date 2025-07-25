@@ -368,27 +368,27 @@ else:
    # Handle cancellation, perhaps by re-routing or ending
     return {"reviewed_content": current_text, "log": state["log"] + ["Human review cancelled/failed."]}
 
-# def final_processing_node(state: AgentState):
-#     print("Final Node: Processing reviewed content.")
-#     # Do something with state["reviewed_content"]
-#     print(f"Final content: {state['reviewed_content']}")
-#     return {"log": state["log"] + [f"Processed: {state['reviewed_content']}"]}
+def final_processing_node(state: AgentState):
+   print("Final Node: Processing reviewed content.")
+   # Do something with state["reviewed_content"]
+   print(f"Final content: {state['reviewed_content']}")
+   return {"log": state["log"] + [f"Processed: {state['reviewed_content']}"]}
 
-# # Setup LangGraph (conceptual)
-# # builder = StateGraph(AgentState)
-# # builder.add_node("generator", generate_content_node)
-# # builder.add_node("human_review", human_review_node)
-# # builder.add_node("finalizer", final_processing_node)
+# Setup LangGraph (conceptual)
+builder = StateGraph(AgentState)
+builder.add_node("generator", generate_content_node)
+builder.add_node("human_review", human_review_node)
+builder.add_node("finalizer", final_processing_node)
 
-# # builder.set_entry_point("generator")
-# # builder.add_edge("generator", "human_review")
-# # builder.add_edge("human_review", "finalizer")
-# # builder.add_edge("finalizer", END)
+builder.set_entry_point("generator")
+builder.add_edge("generator", "human_review")
+builder.add_edge("human_review", "finalizer")
+builder.add_edge("finalizer", END)
 
-# # graph = builder.compile()
-# # inputs = {"topic": "The Future of AI", "log": []}
-# # for event in graph.stream(inputs):
-# #     print(event)
+graph = builder.compile()
+inputs = {"topic": "The Future of AI", "log": []}
+for event in graph.stream(inputs):
+   print(event)
 ```
 
 This integration pattern allows for powerful "human-in-the-loop" capabilities within autonomous agent systems, ensuring critical steps are validated or refined by human intelligence.
