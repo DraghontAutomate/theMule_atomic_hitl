@@ -95,27 +95,27 @@ if final_data:
 else:
     print("Review session was cancelled or failed.")
 
-# Example 2: Reviewing content from a dictionary, with a custom UI config
+ Example 2: Reviewing content from a dictionary, with a custom UI config
 # Assumes 'my_custom_config.json' defines UI fields and actions
 # and 'my_data_dict' contains fields like 'originalText', 'editedText', and other metadata.
-# my_data_dict = {
-# "originalText": "Old version of text.",
-# "editedText": "New version to review.",
-# "projectName": "Project X",
-# "status": "Pending Review"
-# }
-# final_data_custom = hitl_node_run(
-# content_to_review=my_data_dict,
-# custom_config_path="path/to/my_custom_config.json"
-# )
+my_data_dict = {
+"originalText": "Old version of text.",
+"editedText": "New version to review.",
+"projectName": "Project X",
+"status": "Pending Review"
+}
+final_data_custom = hitl_node_run(
+content_to_review=my_data_dict,
+custom_config_path="path/to/my_custom_config.json"
+)
 
 # Example 3: Integrating into an existing PyQt application
-# my_qt_app = QApplication.instance() or QApplication(sys.argv)
+my_qt_app = QApplication.instance() or QApplication(sys.argv)
 # ... (your application setup) ...
-# final_data_integrated = hitl_node_run(
-# content_to_review="Some text for HITL within my app.",
-# existing_qt_app=my_qt_app
-# )
+final_data_integrated = hitl_node_run(
+content_to_review="Some text for HITL within my app.",
+existing_qt_app=my_qt_app
+)
 # ... (your application continues, event loop is managed by you) ...
 ```
 
