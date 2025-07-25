@@ -335,38 +335,38 @@ Imagine an AI agent tasked with drafting a technical report. The process might i
 
 ```python
 # (Conceptual - Assumes LangGraph setup)
-# from langgraph.graph import StateGraph, END
-# from themule_atomic_hitl import hitl_node_run
-# from typing import TypedDict, Annotated, List
-# import operator
+from langgraph.graph import StateGraph, END
+from themule_atomic_hitl import hitl_node_run
+from typing import TypedDict, Annotated, List
+import operator
 
-# class AgentState(TypedDict):
-#     raw_content: str
-#     reviewed_content: str
-#     log: List[str]
+class AgentState(TypedDict):
+   raw_content: str
+   reviewed_content: str
+   log: List[str]
 
-# def generate_content_node(state: AgentState):
-#     # Replace with actual LLM call
-#     generated_text = f"This is AI generated content based on: {state.get('topic', 'default topic')}."
-#     print("AI Node: Generated content.")
-#     return {"raw_content": generated_text, "log": state["log"] + ["Generated content."]}
+def generate_content_node(state: AgentState):
+   # Replace with actual LLM call
+   generated_text = f"This is AI generated content based on: {state.get('topic', 'default topic')}."
+   print("AI Node: Generated content.")
+   return {"raw_content": generated_text, "log": state["log"] + ["Generated content."]}
 
-# def human_review_node(state: AgentState):
-#     print("HITL Node: Requesting human review...")
-#     current_text = state["raw_content"]
+def human_review_node(state: AgentState):
+   print("HITL Node: Requesting human review...")
+   current_text = state["raw_content"]
 
-#     # Call the HITL tool
-#     # You could pass a custom config if needed, e.g., to display the 'topic'
-#     hitl_result = hitl_node_run(content_to_review=current_text)
+# Call the HITL tool
+# You could pass a custom config if needed, e.g., to display the 'topic'
+hitl_result = hitl_node_run(content_to_review=current_text)
 
-#     if hitl_result and "editedText" in hitl_result:
-#         reviewed_text = hitl_result["editedText"]
-#         print("HITL Node: Review complete.")
-#         return {"reviewed_content": reviewed_text, "log": state["log"] + ["Content reviewed by human."]}
-#     else:
-#         print("HITL Node: Review cancelled or failed.")
-#         # Handle cancellation, perhaps by re-routing or ending
-#         return {"reviewed_content": current_text, "log": state["log"] + ["Human review cancelled/failed."]}
+if hitl_result and "editedText" in hitl_result:
+   reviewed_text = hitl_result["editedText"]
+   print("HITL Node: Review complete.")
+   return {"reviewed_content": reviewed_text, "log": state["log"] + ["Content reviewed by human."]}
+else:
+   print("HITL Node: Review cancelled or failed.")
+   # Handle cancellation, perhaps by re-routing or ending
+    return {"reviewed_content": current_text, "log": state["log"] + ["Human review cancelled/failed."]}
 
 # def final_processing_node(state: AgentState):
 #     print("Final Node: Processing reviewed content.")
