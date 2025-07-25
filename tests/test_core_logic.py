@@ -311,5 +311,14 @@ class TestSurgicalEditorLogic(unittest.TestCase):
         self.assertEqual(self.editor_logic.data["version"], original_version_snapshot, "Version did not revert to initial state.")
         self.assertEqual(self.editor_logic.edit_results[-1]['status'], "action_revert_changes_success", "Revert action was not logged correctly.")
 
+    def test_08_retry_locator_with_new_hint(self):
+        """Tests reprocessing location with a revised hint during confirmation."""
+        self.editor_logic.add_edit_request(instruction="edit text", request_type="hint_based", hint="initial")
+        self.mock_callbacks['confirm_location_details'].assert_called_once()
+        # Simulate user requesting a new locator attempt with the same hint
+        self.editor_logic.retry_locator_with_new_hint("initial")
+        self.assertEqual(self.mock_callbacks['confirm_location_details'].call_count, 2)
+        self.assertEqual(self.editor_logic.active_edit_task['user_hint'], "initial")
+
 if __name__ == '__main__':
     unittest.main()

@@ -470,6 +470,7 @@ function initializeHitlUIElements() {
     app.ui.originalHintDisplay = document.getElementById('original-hint-display');
     app.ui.locatedSnippetPreview = document.getElementById('located-snippet-preview');
     app.ui.inputRevisedHint = document.getElementById('input-revised-hint');
+    app.ui.btnReprocessLocation = document.getElementById('btn-reprocess-location');
     app.ui.btnConfirmLocation = document.getElementById('btn-confirm-location');
     app.ui.btnCancelLocationStage = document.getElementById('btn-cancel-location-stage');
     app.ui.innerLoopDecisionArea = document.getElementById('inner-loop-decision-area');
@@ -668,17 +669,31 @@ function initializeHitlUIElements() {
             // If the API is available and there are active task details with location info,
             if (app.api && app.activeTaskDetails && app.activeTaskDetails.location_info) {
                 // submit the confirmed location and instruction.
-                app.api.submitConfirmedLocationAndInstruction(app.activeTaskDetails.location_info, app.activeTaskDetails.user_instruction);
+                app.api.submitConfirmedLocationAndInstruction(
+                    JSON.stringify(app.activeTaskDetails.location_info),
+                    app.activeTaskDetails.user_instruction
+                );
+                clearHighlightedSnippets();
             } else if (!app.api) console.error("ConfirmLocation: app.api not available.");
+        };
+    }
+    if (app.ui.btnReprocessLocation) {
+        app.ui.btnReprocessLocation.onclick = () => {
+            if (app.api && app.ui.inputRevisedHint) {
+                const revised = app.ui.inputRevisedHint.value || '';
+                app.api.retryLocatorWithNewHint(revised);
+                clearHighlightedSnippets();
+            } else if (!app.api) console.error('ReprocessLocation: app.api not available.');
         };
     }
     // If the "Cancel Location Stage" button exists,
     if (app.ui.btnCancelLocationStage) {
         // set its onclick handler.
         app.ui.btnCancelLocationStage.onclick = () => {
-            // If the API is available, submit a 'cancel' decision.
-            if (app.api) app.api.submitLLMTaskDecision('cancel');
+            // If the API is available, cancel the active task.
+            if (app.api) app.api.cancelActiveTask();
             else console.error("CancelLocationStage: app.api not available.");
+            clearHighlightedSnippets();
         };
     }
     // If the "Approve This Edit" button exists,
@@ -764,6 +779,53 @@ function updateSelectionContextStatus() {
     }
     // The general enabled/disabled state of btnUseSelectionContext itself
     // will be handled by updateGlobalUIState and editor selection change events.
+}
+
+// --- Helper functions for highlighting located snippets ---
+function highlightLocatedSnippets(locationInfo) {
+    const mainDiffWidgetConfig = app.config.fields?.find(f => f.type === 'diff-editor' && f.placement === 'mainbody');
+    const mainDiffWidgetName = mainDiffWidgetConfig?.name || 'main_diff';
+    const editorWidget = app.widgets[mainDiffWidgetName];
+    if (!editorWidget || !editorWidget.instance || typeof monaco === 'undefined') return;
+    const originalEditor = editorWidget.instance.getOriginalEditor();
+    if (!originalEditor) return;
+    const model = originalEditor.getModel();
+    if (!model) return;
+
+    const infos = Array.isArray(locationInfo) ? locationInfo : [locationInfo];
+    const decorations = [];
+    infos.forEach(info => {
+        let range = null;
+        if (typeof info.start_idx === 'number' && typeof info.end_idx === 'number') {
+            const start = model.getPositionAt(info.start_idx);
+            const end = model.getPositionAt(info.end_idx);
+            range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
+        } else if (info.start_line && info.start_col && info.end_line && info.end_col) {
+            range = new monaco.Range(info.start_line, info.start_col, info.end_line, info.end_col);
+        } else if (info.snippet) {
+            const idx = model.getValue().indexOf(info.snippet);
+            if (idx !== -1) {
+                const start = model.getPositionAt(idx);
+                const end = model.getPositionAt(idx + info.snippet.length);
+                range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
+            }
+        }
+        if (range) {
+            decorations.push({ range, options: { inlineClassName: 'llm-snippet-highlight' } });
+        }
+    });
+
+    editorWidget.snippetDecorations = originalEditor.deltaDecorations(editorWidget.snippetDecorations || [], decorations);
+}
+
+function clearHighlightedSnippets() {
+    const mainDiffWidgetConfig = app.config.fields?.find(f => f.type === 'diff-editor' && f.placement === 'mainbody');
+    const mainDiffWidgetName = mainDiffWidgetConfig?.name || 'main_diff';
+    const editorWidget = app.widgets[mainDiffWidgetName];
+    if (!editorWidget || !editorWidget.instance || !editorWidget.snippetDecorations) return;
+    const originalEditor = editorWidget.instance.getOriginalEditor();
+    if (!originalEditor) return;
+    editorWidget.snippetDecorations = originalEditor.deltaDecorations(editorWidget.snippetDecorations, []);
 }
 
 // --- Main Execution Block ---
@@ -862,6 +924,8 @@ loader.init().then(monaco => { // Monaco loader uncommented
             if (app.ui.originalHintDisplay) app.ui.originalHintDisplay.textContent = original_hint;
             if (app.ui.locatedSnippetPreview) app.ui.locatedSnippetPreview.textContent = location_info.snippet;
             if (app.ui.inputRevisedHint) app.ui.inputRevisedHint.value = original_hint;
+            clearHighlightedSnippets();
+            highlightLocatedSnippets(location_info);
             // Update the global UI state.
             updateGlobalUIState(true, 'awaiting_location_confirmation');
             // Focus on the revised hint input.
@@ -878,6 +942,7 @@ loader.init().then(monaco => { // Monaco loader uncommented
         app.api.showDiffPreviewSignal.connect((originalSnippet, editedSnippet/*, contextBefore, contextAfter */) => {
             // Log that the signal was received.
             console.log("JS: showDiffPreviewSignal received.");
+            clearHighlightedSnippets();
             // Get the main diff editor widget configuration.
             const mainDiffWidgetConfig = app.config.fields?.find(f => f.type === 'diff-editor' && f.placement === 'mainbody');
             // Get the main diff editor widget name.

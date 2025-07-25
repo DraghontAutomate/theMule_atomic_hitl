@@ -172,6 +172,11 @@
       animation: spin 1s linear infinite;
       margin-left: 15px; /* Space from queue status */
     }
+
+    /* Highlight style for located snippets */
+    .llm-snippet-highlight {
+      background-color: #fff3cd;
+    }
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -258,6 +263,7 @@
             <label for="input-revised-hint">Revise Hint (optional, if LLM missed the spot):</label>
             <input type="text" id="input-revised-hint"> <!-- Allows user to provide a corrected hint -->
         </div>
+        <button id="btn-reprocess-location" class="action-button">Resubmit Revised Hint</button>
         <button id="btn-confirm-location" class="action-button primary">Confirm Location & Proceed with Edit</button>
         <button id="btn-cancel-location-stage" class="action-button danger">Cancel This Edit Task</button>
       </div>

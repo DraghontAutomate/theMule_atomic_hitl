@@ -338,14 +338,20 @@ class Backend(QObject):
             traceback.print_exc()
             self.showErrorSignal.emit(f"Internal error processing edit request: {e}")
 
-    @pyqtSlot(dict, str)
-    def submitConfirmedLocationAndInstruction(self, confirmed_location_details: Dict[str, Any], original_instruction: str):
+    @pyqtSlot(str, str)
+    def submitConfirmedLocationAndInstruction(self, confirmed_location_details_json: str, original_instruction: str):
         """
         Slot called by JS after the user has confirmed/adjusted the snippet location.
         """
+        try:
+            details = json.loads(confirmed_location_details_json)
+        except Exception:
+            self.showErrorSignal.emit("Invalid location details provided from UI")
+            return
+
         self.request_task.emit(
             self.logic.proceed_with_edit_after_location_confirmation,
-            (confirmed_location_details, original_instruction),
+            (details, original_instruction),
             {},
         )
 
@@ -357,6 +363,24 @@ class Backend(QObject):
         self.request_task.emit(
             self.logic.update_active_task_and_retry,
             (new_hint, new_instruction),
+            {},
+        )
+
+    @pyqtSlot(str)
+    def retryLocatorWithNewHint(self, revised_hint: str):
+        """Slot to retry the locator step with a user revised hint."""
+        self.request_task.emit(
+            self.logic.retry_locator_with_new_hint,
+            (revised_hint,),
+            {},
+        )
+
+    @pyqtSlot()
+    def cancelActiveTask(self):
+        """Slot to cancel any active task regardless of its current state."""
+        self.request_task.emit(
+            self.logic.cancel_active_task,
+            tuple(),
             {},
         )
 
