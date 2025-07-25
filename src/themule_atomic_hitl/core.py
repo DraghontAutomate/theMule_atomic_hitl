@@ -865,11 +865,18 @@ class SurgicalEditorLogic:
                 user_prompt=user_prompt_for_editor
             )
 
-            if edited_snippet is None: # Check if LLM returned None (e.g. error in service)
+            if edited_snippet is None:  # Check if LLM returned None (e.g. error in service)
                 self.callbacks['show_error']("LLM editor returned None. Using original snippet.")
                 return snippet_to_edit
 
-            return edited_snippet.strip() # Clean whitespace
+            # If structured output was returned, extract the edited text
+            if isinstance(edited_snippet, dict):
+                edited_snippet = edited_snippet.get("edited_text", json.dumps(edited_snippet))
+
+            if not isinstance(edited_snippet, str):
+                edited_snippet = str(edited_snippet)
+
+            return edited_snippet.strip()  # Clean whitespace
 
         except Exception as e:
             self.callbacks['show_error'](f"Error during LLM edit: {str(e)}")
