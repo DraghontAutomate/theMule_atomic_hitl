@@ -1,6 +1,11 @@
 # theMule_atomic_hitl
 **Open-source Python tool for human-in-the-loop text editing with a PyQt5 diff viewer**
 
+![My Diagram](the_mule_logo.jpg)
+
+theMule is a Python Human‑in‑the‑Loop library that lets you approve, edit, or regenerate each atomic change of an LLM via an interactive diff GUI, eliminating endless prompt/retry loops. 
+Inspired by Asimov’s Mule and its power of control, it ensures maximum precision and transparency at every stage of editing.
+
 ## General Overview
 
 `theMule_atomic_hitl` (Human-in-the-Loop) is a tool designed to facilitate precise, reviewed modifications to text-based data. It provides a PyQt5-based graphical user interface where a user can:
